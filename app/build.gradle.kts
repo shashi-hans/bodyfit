@@ -20,8 +20,13 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+            // A debug build installs beside the release one under its own id. Without a
+            // distinct label the launcher shows two identical icons and the wrong one gets
+            // opened, so the suffix is part of what the user sees, not just the id.
+            resValue("string", "app_name", "Body Fit (debug)")
         }
         release {
+            resValue("string", "app_name", "Body Fit")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -40,6 +45,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
