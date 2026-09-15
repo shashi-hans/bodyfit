@@ -1,6 +1,6 @@
 # Sync and sharing
 
-Spec for turning BodyFit from an on-device tracker into an account-backed one: live
+Spec for turning Body Fit from an on-device tracker into an account-backed one: live
 sharing with a coach or family member, private-group challenges, multi-device sync, and
 revocation that actually revokes.
 

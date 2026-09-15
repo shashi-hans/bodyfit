@@ -117,6 +117,47 @@ interface HealthDao {
         syncWaterTotal(entry.date)
     }
 
+    @Query("DELETE FROM water_entry WHERE date IN (:dates)")
+    suspend fun deleteWaterForDates(dates: List<String>)
+
+    /** Every hourly row on record, for the backup writer. */
+    @Query("SELECT * FROM hourly_record ORDER BY date, hour")
+    suspend fun allHoursOnce(): List<HourlyRecord>
+
+    @Query("DELETE FROM hourly_record WHERE date IN (:dates)")
+    suspend fun deleteHoursForDates(dates: List<String>)
+
+    /**
+     * Writes a backup's rows over the days it covers, in one transaction.
+     *
+     * Only the dates in the file are touched: a day the phone recorded but the file does not
+     * carry is left alone, so restoring an old backup never erases newer tracking. Within a
+     * restored day the file wins outright, because a half-merged day would be neither what
+     * was backed up nor what was tracked.
+     *
+     * Water entries and hourly rows for those days are replaced rather than added to, so
+     * restoring the same file twice cannot double a day's total.
+     */
+    @Transaction
+    suspend fun restore(
+        days: List<DailyRecord>,
+        hours: List<HourlyRecord>,
+        water: List<WaterEntry>,
+    ) {
+        val now = System.currentTimeMillis()
+        val dates = days.map { it.date }
+        val dateSet = dates.toSet()
+        if (dates.isNotEmpty()) {
+            deleteWaterForDates(dates)
+            deleteHoursForDates(dates)
+        }
+        water.filter { it.date in dateSet }.forEach { insertWaterEntry(it.copy(id = 0)) }
+        hours.filter { it.date in dateSet }.forEach { upsertHour(it) }
+        days.forEach { day ->
+            upsertDay(day.copy(waterMl = waterTotal(day.date), updatedAt = now))
+        }
+    }
+
     @Transaction
     suspend fun syncWaterTotal(date: String) {
         val total = waterTotal(date)

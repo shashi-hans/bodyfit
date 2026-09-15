@@ -1,4 +1,4 @@
-# BodyFit
+# Body Fit
 
 An Android activity and hydration tracker. Steps, calories, distance, move minutes,
 heart points and water, with daily goals, weekly targets, a weekly trend chart, and a
@@ -179,10 +179,24 @@ the device.
 
 ## Backup
 
-There is no sync, so a lost phone is a lost history. Goals has an export that writes every
-day, drink and setting to JSON at a location chosen through the system file picker, so no
-storage permission is involved and the app never sees a path it was not handed. There is no
-importer yet, which means the file is currently a safeguard rather than a migration route.
+There is no sync, and Android's own auto-backup is off, so the export is the only way data
+leaves or re-enters the phone. Both directions live under About on the Goals tab and go
+through the system file picker, so no storage permission is involved and the app never
+sees a path it was not handed.
+
+The file carries everything the app shows: every day's steps, calories, move minutes,
+heart points and water; the hourly breakdown behind the Day trend; every logged drink with
+its timestamp; and height, weight, age, sex, smoking and all goals. BMI and the wellbeing
+score are not stored, because both are computed from those inputs and would only go stale.
+
+Restoring overwrites the days the file carries and leaves every other day alone, so an old
+backup never erases newer tracking. Water entries and hourly rows for a restored day are
+replaced rather than appended, so restoring the same file twice cannot double a total. The
+tracker switch is not restored: whether this phone is counting is a property of the phone.
+
+`format` is 2. A version 1 file still restores; it simply carries no hourly rows, and the
+Day trend draws those days as empty. A file written by a newer format is refused outright
+rather than half read.
 
 ## The current day
 
@@ -228,9 +242,12 @@ No internet permission is declared.
 
 Step counts, water entries, height and weight are personal health data. They are held in
 a local Room database (`bodyfit.db`) and a local DataStore, and never leave the
-device: no account, no sync, no third party, nothing to move out of India. Android's own
-backup rules include the database, so a user who has device backup switched on will have
-it restored to their next phone through their own Google account.
+device: no account, no sync, no third party, nothing to move out of India.
+
+`android:allowBackup` is `false`. Android's auto-backup would otherwise copy this data to
+the user's Google account, which is a third party and outside `ap-south-1`, and would make
+the claim above untrue. The cost is that a reinstall starts empty, which is why the export
+and restore in the app are the recovery route and are named as such on the Goals tab.
 
 If cloud sync is added later it changes this picture completely: it would need DPDP Act
 2023 consent, retention and deletion flows, and storage in `ap-south-1`.
@@ -243,12 +260,12 @@ one day, rolled over correctly at midnight into a fresh row, and logged water fr
 the app chips and the lock-screen buttons.
 
 Note for MIUI and HyperOS: those builds kill background services aggressively. If step
-counts stall while the phone is idle, set BodyFit to **No restrictions** under
-Settings → Apps → BodyFit → Battery saver, and lock it in Recents.
+counts stall while the phone is idle, set Body Fit to **No restrictions** under
+Settings → Apps → Body Fit → Battery saver, and lock it in Recents.
 
 ## Naming
 
-The app is called **BodyFit**. The launcher icon is a white figure with its arms straight
+The app is called **Body Fit**. The launcher icon is a white figure with its arms straight
 out, outlined in mint, with "B" under its left hand and "F" under its right, on the brand
 green (`res/drawable/ic_launcher_foreground.xml`).
 

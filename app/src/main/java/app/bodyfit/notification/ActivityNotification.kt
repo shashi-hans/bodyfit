@@ -57,7 +57,7 @@ object ActivityNotification {
     /** A minimal card, used for the first `startForeground` call before any data is read. */
     fun placeholder(context: Context): Notification = base(context)
         .setContentTitle("👣 Counting your steps")
-        .setContentText("BodyFit is watching the step sensor")
+        .setContentText("Body Fit is watching the step sensor")
         .build()
 
     fun build(context: Context, record: DailyRecord, settings: UserSettings): Notification {

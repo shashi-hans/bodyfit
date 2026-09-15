@@ -125,6 +125,9 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     /** Serialises everything to JSON for the backup file. */
     suspend fun backupJson(): String = repository.backupJson()
 
+    /** Writes a chosen backup file back in. Returns the number of days restored. */
+    suspend fun restoreJson(json: String): Int = repository.restoreJson(json)
+
     /** Turning the tracker off stops the service, which also removes the lock-screen card. */
     fun setTrackerEnabled(enabled: Boolean) = viewModelScope.launch {
         repository.userSettings.setTrackerEnabled(enabled)
