@@ -15,7 +15,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -30,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
@@ -42,13 +48,30 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import app.bodyfit.R
 import app.bodyfit.data.Backup
+import app.bodyfit.ui.screens.AboutScreen
+import app.bodyfit.ui.screens.AboutYouScreen
+import app.bodyfit.ui.screens.BackupScreen
+import app.bodyfit.ui.screens.CupSizeScreen
 import app.bodyfit.ui.screens.GoalsScreen
+import app.bodyfit.ui.screens.HowNumbersWorkScreen
+import app.bodyfit.ui.screens.LockScreenCardScreen
 import app.bodyfit.ui.screens.HealthScreen
 import app.bodyfit.ui.screens.TodayScreen
 import app.bodyfit.ui.screens.TrendsScreen
 import app.bodyfit.ui.screens.WaterScreen
 import kotlinx.coroutines.launch
+
+/** The pages the menu opens. Not tabs: each is pushed and comes back with the arrow. */
+private enum class MenuPage(val route: String, val emoji: String, val label: String) {
+    ABOUT_YOU("about-you", "🧍", "About you"),
+    CUP_SIZE("cup-size", "🥤", "Default cup size"),
+    LOCK_SCREEN("lock-screen", "🔒", "Lock screen card"),
+    HOW_NUMBERS("how-numbers", "🧮", "How the numbers work"),
+    BACKUP("backup", "💾", "Backup"),
+    ABOUT("about", "ℹ️", "About"),
+}
 
 private enum class Tab(val route: String, val emoji: String, val label: String) {
     TODAY("today", "🏠", "Today"),
@@ -112,6 +135,61 @@ fun BodyFitAppScreen(
         }
     }
 
+    // Any MIME type is accepted, not just application/json: a file that has come back from a
+    // cloud drive or a messaging app often arrives as octet-stream, and refusing to list it
+    // in the picker would look like the backup had gone missing.
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val message = runCatching {
+                val days = viewModel.restoreJson(Backup.read(context, uri))
+                "Restored $days ${if (days == 1) "day" else "days"}"
+            }.getOrElse { failure ->
+                // The parser's own messages are written for the user; anything else is not.
+                if (failure is IllegalArgumentException && failure.message != null) {
+                    failure.message!!
+                } else {
+                    "Could not read that file: ${failure.message}"
+                }
+            }
+            snackbar.showSnackbar(message)
+        }
+    }
+
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        // The charts on Trends take horizontal drags, so the edge swipe is allowed only on
+        // the tab that shows the menu button. Everywhere else the drawer opens from Today.
+        gesturesEnabled = drawerState.isOpen || currentRoute == Tab.TODAY.route,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 28.dp, top = 24.dp, bottom = 12.dp),
+                )
+                MenuPage.entries.forEach { page ->
+                    NavigationDrawerItem(
+                        icon = { Text(page.emoji, style = MaterialTheme.typography.titleMedium) },
+                        label = { Text(page.label) },
+                        selected = currentRoute == page.route,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            if (currentRoute != page.route) {
+                                navController.navigate(page.route) { launchSingleTop = true }
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
+            }
+        },
+    ) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
@@ -168,6 +246,7 @@ fun BodyFitAppScreen(
                         settings = settings,
                         activeDate = activeDate,
                         onLogWater = viewModel::logWater,
+                        onOpenMenu = { scope.launch { drawerState.open() } },
                         contentPadding = contentPadding,
                     )
                 }
@@ -210,19 +289,61 @@ fun BodyFitAppScreen(
                         onMoveMinuteGoal = viewModel::setMoveMinuteGoal,
                         onWeeklyStepGoal = viewModel::setWeeklyStepGoal,
                         onWeeklyHeartPointGoal = viewModel::setWeeklyHeartPointGoal,
+                        contentPadding = contentPadding,
+                    )
+                }
+
+                composable(MenuPage.ABOUT_YOU.route) {
+                    AboutYouScreen(
+                        settings = settings,
                         onHeight = viewModel::setHeight,
                         onWeight = viewModel::setWeight,
-                        onDefaultCup = viewModel::setDefaultCup,
-                        onTrackerEnabled = viewModel::setTrackerEnabled,
                         onAge = viewModel::setAge,
                         onSmoker = viewModel::setSmoker,
                         onSex = viewModel::setSex,
+                        onBack = { navController.popBackStack() },
+                        contentPadding = contentPadding,
+                    )
+                }
+                composable(MenuPage.CUP_SIZE.route) {
+                    CupSizeScreen(
+                        settings = settings,
+                        onDefaultCup = viewModel::setDefaultCup,
+                        onBack = { navController.popBackStack() },
+                        contentPadding = contentPadding,
+                    )
+                }
+                composable(MenuPage.LOCK_SCREEN.route) {
+                    LockScreenCardScreen(
+                        settings = settings,
+                        onTrackerEnabled = viewModel::setTrackerEnabled,
+                        onBack = { navController.popBackStack() },
+                        contentPadding = contentPadding,
+                    )
+                }
+                composable(MenuPage.HOW_NUMBERS.route) {
+                    HowNumbersWorkScreen(
+                        onBack = { navController.popBackStack() },
+                        contentPadding = contentPadding,
+                    )
+                }
+                composable(MenuPage.BACKUP.route) {
+                    BackupScreen(
                         onExport = { exportLauncher.launch(Backup.suggestedFileName()) },
+                        onRestore = { restoreLauncher.launch(arrayOf("*/*")) },
+                        onBack = { navController.popBackStack() },
+                        contentPadding = contentPadding,
+                    )
+                }
+                composable(MenuPage.ABOUT.route) {
+                    AboutScreen(
+                        onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,
                     )
                 }
             }
         }
+    }
     }
 }
 
@@ -241,7 +362,7 @@ private fun PermissionBanner(onRequestPermissions: () -> Unit, modifier: Modifie
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "BodyFit needs physical activity access to read the step sensor, and " +
+                text = "Body Fit needs physical activity access to read the step sensor, and " +
                     "notification access to show the lock-screen card.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,

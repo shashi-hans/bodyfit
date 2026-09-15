@@ -14,7 +14,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -57,6 +61,7 @@ fun TodayScreen(
     settings: UserSettings,
     activeDate: String,
     onLogWater: (Int) -> Unit,
+    onOpenMenu: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -70,7 +75,7 @@ fun TodayScreen(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { Header() }
+        item { Header(onOpenMenu) }
 
         item {
             Card(
@@ -326,7 +331,7 @@ private fun PlainStat(
  * misaligned copy of the text.
  */
 @Composable
-private fun Header() {
+private fun Header(onOpenMenu: () -> Unit) {
     val now = remember { LocalTime.now() }
     val greeting = when (now.hour) {
         in 5..11 -> "Good morning ☀️"
@@ -339,7 +344,16 @@ private fun Header() {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppLogo()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onOpenMenu) {
+                Icon(
+                    imageVector = Icons.Filled.Menu,
+                    contentDescription = "Open menu",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            AppLogo()
+        }
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 text = greeting,
