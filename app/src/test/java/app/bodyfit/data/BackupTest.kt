@@ -16,13 +16,17 @@ class BackupTest {
         DailyRecord("2026-09-07", steps = 7_429, moveMinutes = 58, heartPoints = 50, activeKcal = 328.05, waterMl = 2_500),
         DailyRecord("2026-09-08", steps = 13_207, moveMinutes = 74, heartPoints = 83, activeKcal = 484.0, waterMl = 3_500),
     )
+    private val hours = listOf(
+        HourlyRecord("2026-09-08", hour = 7, steps = 2_100, moveMinutes = 14, heartPoints = 9, activeKcal = 41.5),
+        HourlyRecord("2026-09-08", hour = 18, steps = 3_400, moveMinutes = 22, heartPoints = 16, activeKcal = 70.0),
+    )
     private val water = listOf(
         WaterEntry(1, "2026-09-08", 500, 1_788_800_000_000),
         WaterEntry(2, "2026-09-08", 250, 1_788_800_100_000),
     )
     private val settings = UserSettings(heightCm = 179, weightKg = 75, age = 34, sex = Sex.MALE)
 
-    private fun parsed() = JSONObject(Backup.toJson(days, water, settings))
+    private fun parsed() = JSONObject(Backup.toJson(days, hours, water, settings))
 
     @Test
     fun `every day survives the round trip with all its fields`() {
@@ -68,13 +72,14 @@ class BackupTest {
 
     @Test
     fun `an empty history still produces a valid file rather than failing`() {
-        val root = JSONObject(Backup.toJson(emptyList(), emptyList(), UserSettings()))
+        val root = JSONObject(Backup.toJson(emptyList(), emptyList(), emptyList(), UserSettings()))
         assertEquals(0, root.getJSONArray("days").length())
+        assertEquals(0, root.getJSONArray("hours").length())
         assertEquals(0, root.getJSONArray("waterEntries").length())
     }
 
     @Test
     fun `the suggested name is dated so successive exports do not overwrite`() {
-        assertEquals("body-fit-backup-2026-09-08.json", Backup.suggestedFileName("2026-09-08"))
+        assertEquals("bodyfit-backup-2026-09-08.json", Backup.suggestedFileName("2026-09-08"))
     }
 }

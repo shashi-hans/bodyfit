@@ -44,9 +44,26 @@ class HealthRepository(context: Context) {
     /** Snapshot for the backup writer. */
     suspend fun backupJson(): String = Backup.toJson(
         days = allDays(),
+        hours = dao.allHoursOnce(),
         water = dao.allWaterEntries(),
         settings = currentSettings(),
     )
+
+    /**
+     * Writes a backup file back into the database and the settings store.
+     *
+     * Returns the number of days restored. Throws [IllegalArgumentException] with a message
+     * worth showing the user when the file is not a backup this build can read.
+     *
+     * A version 1 file carries no hourly rows. Restoring one leaves its days without a
+     * breakdown, which the trends screen already draws as an empty day rather than a gap.
+     */
+    suspend fun restoreJson(json: String): Int {
+        val snapshot = Backup.fromJson(json, currentSettings())
+        dao.restore(snapshot.days, snapshot.hours, snapshot.water)
+        userSettings.replace(snapshot.settings)
+        return snapshot.days.size
+    }
 
     /**
      * The 24 hourly rows of [date], gaps filled, so a chart draws a full day whether or

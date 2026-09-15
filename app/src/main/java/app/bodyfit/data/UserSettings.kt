@@ -96,6 +96,32 @@ class UserSettingsRepository(private val context: Context) {
 
     suspend fun current(): UserSettings = settings.first()
 
+    /**
+     * Writes every goal and body measurement from [value] in one edit, used by restore.
+     *
+     * Each field goes through the same range clamp the individual setters apply, so a file
+     * carrying an out-of-range number lands on the same bound a person typing it would hit.
+     * The tracker switch is not written: whether this phone is counting is a property of the
+     * phone, not of the backup.
+     */
+    suspend fun replace(value: UserSettings) {
+        context.settingsStore.edit { prefs ->
+            prefs[Keys.HEIGHT] = value.heightCm.coerceIn(UserSettings.HEIGHT_RANGE)
+            prefs[Keys.WEIGHT] = value.weightKg.coerceIn(UserSettings.WEIGHT_RANGE)
+            prefs[Keys.STEP_GOAL] = value.stepGoal.coerceIn(UserSettings.STEP_GOAL_RANGE)
+            prefs[Keys.WATER_GOAL] = value.waterGoalMl.coerceIn(UserSettings.WATER_GOAL_RANGE)
+            prefs[Keys.CALORIE_GOAL] = value.calorieGoal.coerceIn(UserSettings.CALORIE_GOAL_RANGE)
+            prefs[Keys.HEART_POINT_GOAL] = value.heartPointGoal.coerceIn(UserSettings.HEART_POINT_GOAL_RANGE)
+            prefs[Keys.MOVE_MINUTE_GOAL] = value.moveMinuteGoal.coerceIn(UserSettings.MOVE_MINUTE_GOAL_RANGE)
+            prefs[Keys.WEEKLY_STEP_GOAL] = value.weeklyStepGoal.coerceAtLeast(1)
+            prefs[Keys.WEEKLY_HEART_POINT_GOAL] = value.weeklyHeartPointGoal.coerceAtLeast(1)
+            prefs[Keys.DEFAULT_CUP] = value.defaultCupMl.coerceIn(50, 1_000)
+            prefs[Keys.AGE] = value.age.coerceIn(UserSettings.AGE_RANGE)
+            prefs[Keys.SMOKER] = value.smoker
+            prefs[Keys.SEX] = value.sex.name
+        }
+    }
+
     suspend fun setHeightCm(value: Int) = putInt(Keys.HEIGHT, value.coerceIn(UserSettings.HEIGHT_RANGE))
     suspend fun setWeightKg(value: Int) = putInt(Keys.WEIGHT, value.coerceIn(UserSettings.WEIGHT_RANGE))
     suspend fun setStepGoal(value: Int) = putInt(Keys.STEP_GOAL, value.coerceIn(UserSettings.STEP_GOAL_RANGE))
