@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!--
+      The "footsteps-ion" glyph from Ionicons (MIT; see NOTICE), fitted to a 24dp icon by
+      scripts/fit_icon.py's transform. Painted white and tinted at the call site, so the
+      same drawable serves the app UI and the notification's status-bar icon, which must
+      be a white silhouette.
+    -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9.24951 11.5487c0.432735 2.87934 -0.36004 4.45359 -2.59887 4.78465c-2.48786 0.367899 -3.51297 -1.2987 -3.9457 -4.17803c-0.582056 -3.87448 0.785899 -6.28424 2.7364 -6.43946C7.21649 5.57491 8.81629 8.66988 9.24951 11.5487" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M10.4112 19.5398c0.153741 1.63467 -0.729903 3.1603 -2.06298 3.42161c-1.34585 0.263276 -2.88376 -0.804073 -3.19713 -2.41615s0.871856 -1.69754 2.3243 -1.97506s2.75015 -1.00202 2.93582 0.969603" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M14.7508 6.83284c-0.432735 2.87934 0.36004 4.45359 2.59838 4.78465c2.48835 0.367899 3.51297 -1.2987 3.9457 -4.17803c0.582547 -3.87497 -0.785899 -6.298 -2.73591 -6.43946c-1.78792 -0.129673 -3.37494 2.95351 -3.80817 5.83284" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M13.5891 14.8244c-0.153741 1.63418 0.729903 3.1603 2.06298 3.42161c1.34585 0.263276 2.88376 -0.804073 3.19713 -2.41615s-0.871856 -1.69754 -2.3243 -1.97555s-2.75015 -1.00202 -2.93582 0.970094" />
+</vector>
