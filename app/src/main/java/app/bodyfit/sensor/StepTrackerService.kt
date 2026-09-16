@@ -268,6 +268,10 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
 
         /** Starts the tracker. Safe to call repeatedly; a running service just keeps running. */
         fun start(context: Context) {
+            // A phone with no step counter would run a foreground service, and show a
+            // permanent lock-screen card, to count nothing. Boot is the path that reaches
+            // here without the activity having checked first.
+            if (!Permissions.hasStepCounter(context)) return
             if (!Permissions.hasActivityRecognition(context)) return
             val intent = Intent(context, StepTrackerService::class.java)
             ContextCompat.startForegroundService(context, intent)

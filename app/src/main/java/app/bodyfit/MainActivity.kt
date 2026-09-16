@@ -12,6 +12,7 @@ import app.bodyfit.data.UserSettingsRepository
 import app.bodyfit.sensor.Permissions
 import app.bodyfit.sensor.StepTrackerService
 import app.bodyfit.ui.BodyFitAppScreen
+import app.bodyfit.ui.screens.NoSensorScreen
 import app.bodyfit.ui.theme.BodyFitTheme
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
@@ -32,20 +33,32 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         activityPermissionGranted = Permissions.hasActivityRecognition(this)
 
+        // Every number the app reports comes from the step counter, so a phone without one
+        // is shown the warning instead of the app rather than a working-looking screen of
+        // zeros. Checked before anything else, including the permission prompt: asking for
+        // access to a sensor that is not fitted would only confuse.
+        val hasStepCounter = Permissions.hasStepCounter(this)
+
         setContent {
             BodyFitTheme {
-                BodyFitAppScreen(
-                    activityPermissionGranted = activityPermissionGranted,
-                    onRequestPermissions = ::requestPermissions,
-                )
+                if (hasStepCounter) {
+                    BodyFitAppScreen(
+                        activityPermissionGranted = activityPermissionGranted,
+                        onRequestPermissions = ::requestPermissions,
+                    )
+                } else {
+                    NoSensorScreen(onClose = { finish() })
+                }
             }
         }
 
+        if (!hasStepCounter) return
         if (!activityPermissionGranted) requestPermissions() else startTrackerIfAllowed()
     }
 
     override fun onResume() {
         super.onResume()
+        if (!Permissions.hasStepCounter(this)) return
         // The day-rollover check lives with the view model, driven by a lifecycle observer
         // in the composable. Reaching for the view model from here would depend on the
         // activity and the composable resolving the same instance, which is true today but
