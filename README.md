@@ -47,12 +47,12 @@ Steps come from the phone's own `TYPE_STEP_COUNTER` sensor. That counter reports
 running total since boot, so the service banks the difference between readings and
 treats a reading lower than the last one as a reboot.
 
-That sensor is optional in Android, and the app requires it. `uses-feature` is declared
-`required="true"`, so Play filters the listing off phones that lack it. A build that
-reaches such a phone another way shows a warning it cannot dismiss and closes rather than
-opening: every activity number comes from this one sensor, and a screen of zeros would
-read as a bad day rather than as missing hardware. The tracker service refuses to start
-for the same reason, which also covers the boot path.
+That sensor is optional in Android, and the app cannot work without it. `uses-feature` is
+declared `required="false"`, so the listing stays downloadable on every device; the check
+happens at launch instead. A phone with no step counter gets a warning it cannot dismiss
+and the app closes rather than opening, because every activity number comes from this one
+sensor and a screen of zeros would read as a bad day rather than as missing hardware. The
+tracker service refuses to start for the same reason, which also covers the boot path.
 
 Steps are also bucketed into 60-second windows. A window opens on the first step after
 a rest, not on the clock, so a walk that starts at 10:00:40 is measured to 10:01:40.

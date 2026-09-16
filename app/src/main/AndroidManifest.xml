@@ -10,12 +10,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- Required, not optional: every number the app reports comes from this sensor, so a
-         phone without one is filtered out of the Play Store listing rather than sold an app
-         that can only show zeros. -->
+    <!-- Declared but not required, so the listing stays downloadable on every device. The
+         app checks for the sensor at launch instead, and says plainly why it cannot run
+         when there is none. Filtering at the store would hide it from phones whose sensor
+         the store's own data gets wrong. -->
     <uses-feature
         android:name="android.hardware.sensor.stepcounter"
-        android:required="true" />
+        android:required="false" />
 
     <application
         android:name=".BodyFitApp"
