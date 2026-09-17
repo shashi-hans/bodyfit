@@ -38,6 +38,23 @@ object Insights {
         return total / window
     }
 
+    /**
+     * Days inside the window that the tracker actually recorded something for.
+     *
+     * [averageSteps] divides by the whole window, which is what a daily average means. The
+     * score needs a different question first: whether there is enough history to average
+     * at all. Today is excluded because it is still in progress, and judging a person on a
+     * morning would read every install as sedentary.
+     */
+    fun trackedDays(days: List<DailyRecord>, window: Int, today: LocalDate = LocalDate.now()): Int {
+        if (window <= 0) return 0
+        val keys = (1 until window).map { today.minusDays(it.toLong()).toString() }.toSet()
+        return days.count { it.date in keys && it.steps > 0 }
+    }
+
+    /** Full days of history the step term needs before it is allowed to move the score. */
+    const val MIN_DAYS_FOR_STEP_TERM = 3
+
     /** One line of the score's working, so a screen can show why the number is what it is. */
     data class ScoreFactor(val label: String, val delta: Int)
 
@@ -72,6 +89,7 @@ object Insights {
     ): HealthScore {
         val bmi = bmi(settings)
         val steps = averageSteps(days, 14, today)
+        val tracked = trackedDays(days, 14, today)
         val factors = buildList {
             add(ScoreFactor("Starting score", 100))
             when {
@@ -79,10 +97,17 @@ object Insights {
                 bmi >= 25.0 -> add(ScoreFactor("BMI 25 to 30", -10))
                 bmi < 18.5 -> add(ScoreFactor("BMI under 18.5", -8))
             }
-            when {
-                steps < 4_000 -> add(ScoreFactor("Under 4,000 steps a day", -22))
-                steps < 7_000 -> add(ScoreFactor("Under 7,000 steps a day", -12))
-                steps >= 10_000 -> add(ScoreFactor("10,000 steps a day or more", 4))
+            // Absence of data is not absence of activity. Before there is enough history
+            // to average, the step term is named and skipped rather than scored, so a new
+            // install is not told it is sedentary on the strength of days nobody tracked.
+            if (tracked < MIN_DAYS_FOR_STEP_TERM) {
+                add(ScoreFactor("Not enough days tracked to judge steps", 0))
+            } else {
+                when {
+                    steps < 4_000 -> add(ScoreFactor("Under 4,000 steps a day", -22))
+                    steps < 7_000 -> add(ScoreFactor("Under 7,000 steps a day", -12))
+                    steps >= 10_000 -> add(ScoreFactor("10,000 steps a day or more", 4))
+                }
             }
             if (settings.smoker) add(ScoreFactor("Smoker", -18))
             if (settings.age > 45) add(ScoreFactor("Over 45", -6))

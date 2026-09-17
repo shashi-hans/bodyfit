@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "app.bodyfit"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.bodyfit"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
         vectorDrawables.useSupportLibrary = true

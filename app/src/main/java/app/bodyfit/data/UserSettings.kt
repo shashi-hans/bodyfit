@@ -47,7 +47,7 @@ data class UserSettings(
         val MOVE_MINUTE_GOAL_RANGE = 10..180
         val HEIGHT_RANGE = 120..220
         val WEIGHT_RANGE = 30..200
-        val CUP_SIZES_ML = listOf(100, 150, 200, 250, 300, 500)
+        val CUP_SIZES_ML = listOf(100, 200, 250, 300, 400, 500)
         val AGE_RANGE = 12..100
     }
 }
