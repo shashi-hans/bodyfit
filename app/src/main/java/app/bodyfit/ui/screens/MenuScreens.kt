@@ -20,9 +20,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import android.content.Intent
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.bodyfit.BuildConfig
@@ -214,6 +219,14 @@ fun LockScreenCardScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    // Re-read on every recomposition rather than remembering: the user leaves for system
+    // settings and comes back, and a cached answer would still show the old state.
+    val exempt = remember(contentPadding) {
+        context.getSystemService(PowerManager::class.java)
+            ?.isIgnoringBatteryOptimizations(context.packageName) ?: false
+    }
+
     MenuPage("Lock screen card", onBack, contentPadding, modifier) {
         item {
             SettingsCard {
@@ -236,6 +249,53 @@ fun LockScreenCardScreen(
                         )
                     }
                     Switch(checked = settings.trackerEnabled, onCheckedChange = onTrackerEnabled)
+                }
+            }
+        }
+
+        item {
+            SettingsCard {
+                Text(
+                    text = "🔋  Battery",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                KeyValueRow(
+                    "Background limits",
+                    if (exempt) "Not restricted" else "Restricted",
+                )
+                Text(
+                    text = if (exempt) {
+                        "Android is letting the tracker run whenever it needs to. Nothing to do."
+                    } else {
+                        "Android may stop the tracker to save power. When it does, your step " +
+                            "total catches up the next time you open the app, but calories, " +
+                            "move minutes and heart points are lost for the time it was off, " +
+                            "because those are scored as you walk."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!exempt) {
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        },
+                    ) {
+                        Text("Open battery settings")
+                    }
+                    Text(
+                        text = "Find ${stringResource(R.string.app_name)} in that list and allow " +
+                            "it to run unrestricted. On Xiaomi phones also set Battery saver to " +
+                            "No restrictions and lock the app in Recents.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }

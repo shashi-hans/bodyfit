@@ -29,9 +29,20 @@ object Permissions {
      * ship without it. Asked of [SensorManager] rather than the `PackageManager` feature
      * flag, because a device can declare the feature and still hand back no sensor.
      */
-    fun hasStepCounter(context: Context): Boolean =
-        context.getSystemService(SensorManager::class.java)
-            ?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null
+    fun hasStepCounter(context: Context): Boolean = sensor(context, Sensor.TYPE_STEP_COUNTER)
+
+    /**
+     * Whether steps can be counted at all, by either route.
+     *
+     * The step counter is preferred and the accelerometer is the fallback. Only a phone
+     * with neither can do nothing, which in practice means almost none: an accelerometer
+     * is fitted to essentially every Android phone.
+     */
+    fun canCountSteps(context: Context): Boolean =
+        hasStepCounter(context) || sensor(context, Sensor.TYPE_ACCELEROMETER)
+
+    private fun sensor(context: Context, type: Int): Boolean =
+        context.getSystemService(SensorManager::class.java)?.getDefaultSensor(type) != null
 
     fun hasActivityRecognition(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||

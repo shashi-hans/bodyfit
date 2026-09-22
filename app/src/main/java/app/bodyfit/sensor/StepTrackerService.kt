@@ -1,5 +1,7 @@
 package app.bodyfit.sensor
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -42,6 +44,13 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
     private lateinit var trackerState: TrackerStateRepository
     private var sensorManager: SensorManager? = null
     private var stepSensor: Sensor? = null
+
+    /**
+     * Used only when there is no step counter chip. Counting in software costs battery and
+     * accuracy, so it is never preferred over the hardware the phone already has.
+     */
+    private var accelerometer: Sensor? = null
+    private val softwarePedometer = SoftwarePedometer()
 
     private val handler = Handler(Looper.getMainLooper())
     private val ticker = object : Runnable {
@@ -94,6 +103,7 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
 
         sensorManager = getSystemService(SensorManager::class.java)
         stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
         lifecycleScope.launch {
             lastRawCount = trackerState.lastRawCount()
@@ -112,6 +122,27 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
         return START_STICKY
     }
 
+    /**
+     * Asks to be restarted when the activity is swiped out of Recents.
+     *
+     * A foreground service normally survives that, but several OEM launchers tear the whole
+     * process down with the task. START_STICKY alone does not always bring it back, so the
+     * alarm re-requests the service a second later, once the old process is gone.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        val restart = PendingIntent.getService(
+            this,
+            RESTART_REQUEST,
+            Intent(applicationContext, StepTrackerService::class.java),
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val alarms = getSystemService(AlarmManager::class.java)
+        runCatching {
+            alarms?.set(AlarmManager.RTC, System.currentTimeMillis() + RESTART_DELAY_MS, restart)
+        }.onFailure { Log.w(TAG, "could not schedule a restart after the task was removed", it) }
+    }
+
     override fun onDestroy() {
         handler.removeCallbacks(ticker)
         sensorManager?.unregisterListener(this)
@@ -119,7 +150,32 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return
+        when (event.sensor.type) {
+            Sensor.TYPE_STEP_COUNTER -> onHardwareCount(event)
+            Sensor.TYPE_ACCELEROMETER -> onAcceleration(event)
+        }
+    }
+
+    /**
+     * One accelerometer sample through the software counter.
+     *
+     * Its steps are banked exactly like the hardware counter's, so everything downstream,
+     * windows, cadence, calories, hourly rows, is identical whichever source is running.
+     * The raw count is not persisted: a software count has no meaning across a restart,
+     * and the baseline it would restore is the pedometer's own internal state.
+     */
+    private fun onAcceleration(event: SensorEvent) {
+        if (event.values.size < 3) return
+        val counted = softwarePedometer.onSample(
+            timestampMs = System.currentTimeMillis(),
+            x = event.values[0],
+            y = event.values[1],
+            z = event.values[2],
+        )
+        if (counted > 0) bank(counted)
+    }
+
+    private fun onHardwareCount(event: SensorEvent) {
         val raw = event.values.firstOrNull()?.toLong() ?: return
         val delta = when {
             // First reading of all time: adopt it as the baseline, bank nothing.
@@ -129,29 +185,51 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
             else -> raw - lastRawCount
         }
         lastRawCount = raw
-        if (delta > 0) {
-            val steps = delta.toInt()
-            pendingSteps += steps
-            // The first step after a rest opens the window, so the 60 seconds are measured
-            // from when walking started rather than from the next tick of the clock.
-            if (windowStartMs < 0) {
-                windowStartMs = System.currentTimeMillis()
-                windowDate = Dates.today()
-                windowHour = Dates.currentHour()
-            }
-            stepsInWindow += steps
+        if (delta > 0) bank(delta.toInt())
+    }
+
+    /** Adds counted steps to the pending total and to the window being measured. */
+    private fun bank(steps: Int) {
+        pendingSteps += steps
+        // The first step after a rest opens the window, so the 60 seconds are measured
+        // from when walking started rather than from the next tick of the clock.
+        if (windowStartMs < 0) {
+            windowStartMs = System.currentTimeMillis()
+            windowDate = Dates.today()
+            windowHour = Dates.currentHour()
         }
+        stepsInWindow += steps
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
+    /**
+     * Listens to the step counter when the phone has one, and to the accelerometer when it
+     * does not.
+     *
+     * The hardware counter runs on a low-power hub and keeps counting while the phone
+     * sleeps. The accelerometer has to be streamed to this process instead, so it is
+     * batched: a one-second report latency lets the hub buffer samples and wake the CPU
+     * once a second rather than twenty-five times.
+     */
     private fun registerSensor() {
-        val sensor = stepSensor
-        if (sensor == null) {
-            Log.w(TAG, "no step counter on this device; the tracker will report zero")
+        val counter = stepSensor
+        if (counter != null) {
+            sensorManager?.registerListener(this, counter, SensorManager.SENSOR_DELAY_NORMAL, 0)
             return
         }
-        sensorManager?.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL, 0)
+        val fallback = accelerometer
+        if (fallback == null) {
+            Log.w(TAG, "no step counter and no accelerometer; the tracker will report zero")
+            return
+        }
+        Log.i(TAG, "no step counter; counting steps from the accelerometer instead")
+        sensorManager?.registerListener(
+            this,
+            fallback,
+            SOFTWARE_SAMPLE_US,
+            SOFTWARE_BATCH_US,
+        )
     }
 
     /**
@@ -266,15 +344,29 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
         /** Length of a measured window. Cadence is steps per window, so this is one minute. */
         private const val WINDOW_MS = 60_000L
 
+        /** 25 Hz, enough to resolve a running cadence without streaming needless samples. */
+        private const val SOFTWARE_SAMPLE_US = 40_000
+
+        /** Let the hub buffer a second of samples, so the CPU wakes once rather than 25 times. */
+        private const val SOFTWARE_BATCH_US = 1_000_000
+
+        private const val RESTART_REQUEST = 4101
+        private const val RESTART_DELAY_MS = 1_000L
+
         /** Starts the tracker. Safe to call repeatedly; a running service just keeps running. */
         fun start(context: Context) {
-            // A phone with no step counter would run a foreground service, and show a
+            // A phone with neither sensor would run a foreground service, and show a
             // permanent lock-screen card, to count nothing. Boot is the path that reaches
             // here without the activity having checked first.
-            if (!Permissions.hasStepCounter(context)) return
+            if (!Permissions.canCountSteps(context)) return
             if (!Permissions.hasActivityRecognition(context)) return
             val intent = Intent(context, StepTrackerService::class.java)
-            ContextCompat.startForegroundService(context, intent)
+            // From Android 12 a foreground service cannot be started from the background,
+            // and the throw is fatal to whatever called it. Boot, the tracker switch and
+            // the resume path can all arrive while the app is not in front, so a refusal is
+            // logged and dropped: the next launch starts it.
+            runCatching { ContextCompat.startForegroundService(context, intent) }
+                .onFailure { Log.w(TAG, "could not start the tracker from the background", it) }
         }
 
         fun stop(context: Context) {

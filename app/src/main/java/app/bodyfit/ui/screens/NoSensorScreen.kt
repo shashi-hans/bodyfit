@@ -29,12 +29,13 @@ fun NoSensorScreen(onClose: () -> Unit) {
                 dismissOnBackPress = false,
                 dismissOnClickOutside = false,
             ),
-            title = { Text("⚠️  No step sensor") },
+            title = { Text("⚠️  No motion sensors") },
             text = {
                 Text(
-                    text = "This phone has no step counter, and ${stringResource(R.string.app_name)} " +
-                        "counts every number it shows from that one sensor. Steps, distance, " +
-                        "calories, move minutes and heart points would all read zero.\n\n" +
+                    text = "This phone has neither a step counter nor an accelerometer, and " +
+                        "${stringResource(R.string.app_name)} counts every number it shows from " +
+                        "one or the other. Steps, distance, calories, move minutes and heart " +
+                        "points would all read zero.\n\n" +
                         "The app cannot run here. Nothing on this phone is wrong and there is " +
                         "no setting to change: the hardware is simply not fitted.",
                     style = MaterialTheme.typography.bodyMedium,
