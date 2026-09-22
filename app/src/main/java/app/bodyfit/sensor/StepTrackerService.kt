@@ -334,6 +334,15 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
             // Reached when activity recognition was revoked while the service was starting.
             Log.w(TAG, "cannot run in the foreground without activity recognition", e)
             stopSelf()
+        } catch (e: IllegalStateException) {
+            // ForegroundServiceStartNotAllowedException, which extends IllegalStateException
+            // and so is not caught above. From Android 12 the system refuses to let a
+            // service started from the background go foreground, and the refusal arrives
+            // here, inside onCreate, where an uncaught throw kills the process rather than
+            // the service. Stopping promptly also avoids the separate timeout for a service
+            // that was asked to go foreground and never did.
+            Log.w(TAG, "not allowed to go foreground from the background; stopping", e)
+            stopSelf()
         }
     }
 
