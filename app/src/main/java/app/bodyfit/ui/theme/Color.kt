@@ -35,6 +35,17 @@ data class VizColors(
     val distance: Color,
     val heartPoints: Color,
     val moveMinutes: Color,
+    /**
+     * The same three hues, darkened or lightened until they are safe as text.
+     *
+     * A colour that passes as a mark does not necessarily pass as a figure: a mark is read
+     * by its shape and position, a number by the letterforms themselves. Measured against
+     * the card, the mark colours give 1.90:1 for calories in light and 3.45:1 for steps in
+     * dark, well under the 4.5:1 that body text needs. These clear 5:1 in both themes.
+     */
+    val stepsText: Color,
+    val caloriesText: Color,
+    val heartPointsText: Color,
     /** Unfilled part of a ring or meter. Recessive by design. */
     val track: Color,
     /** Chart baseline and gridlines. Recessive by design. */
@@ -58,6 +69,9 @@ val LightViz = VizColors(
     distance = Color(0xFFE87BA4),
     heartPoints = Color(0xFFE34948),
     moveMinutes = Color(0xFF1BAF7A),
+    stepsText = Color(0xFF006B00),
+    caloriesText = Color(0xFF8A5A00),
+    heartPointsText = Color(0xFFB3261E),
     track = Color(0xFFE7E5E0),
     grid = Color(0xFFEAE8E3),
     goalLine = Color(0xFF8E8C86),
@@ -73,6 +87,9 @@ val DarkViz = VizColors(
     distance = Color(0xFFD55181),
     heartPoints = Color(0xFFCC4444),
     moveMinutes = Color(0xFF199E70),
+    stepsText = Color(0xFF4CC44C),
+    caloriesText = Color(0xFFE0A63C),
+    heartPointsText = Color(0xFFF08B88),
     track = Color(0xFF33332F),
     grid = Color(0xFF2E2E2B),
     goalLine = Color(0xFF7C7A73),

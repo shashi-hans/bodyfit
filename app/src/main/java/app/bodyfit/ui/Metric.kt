@@ -2,8 +2,7 @@ package app.bodyfit.ui
 
 import androidx.annotation.DrawableRes
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.WaterDrop
@@ -15,7 +14,6 @@ import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.UserSettings
 import app.bodyfit.data.Volume
 import app.bodyfit.sensor.Metrics
-import app.bodyfit.ui.components.Emblem
 import app.bodyfit.ui.theme.VizColors
 import java.util.Locale
 
@@ -35,7 +33,7 @@ enum class Metric(
 ) {
 
     STEPS("👣", "Steps", "steps", R.drawable.ic_footsteps),
-    CALORIES("🔥", "Calories", "kcal"),
+    CALORIES("🔥", "Calories", "kcal", R.drawable.ic_flame),
     DISTANCE("📍", "Distance", "km"),
     MOVE_MINUTES("⏱️", "Move minutes", "min"),
     HEART_POINTS("🫀", "Heart points", "pts"),
@@ -114,25 +112,26 @@ enum class Metric(
     val vector: ImageVector?
         get() = when (this) {
             STEPS -> null
-            CALORIES -> Icons.Filled.LocalFireDepartment
+            CALORIES -> null
             DISTANCE -> Icons.Filled.Place
             MOVE_MINUTES -> Icons.Filled.Timer
-            HEART_POINTS -> Icons.Filled.MonitorHeart
+            HEART_POINTS -> Icons.Filled.Favorite
             WATER -> Icons.Filled.WaterDrop
         }
 
+
+
     /**
-     * The shape that fills on the Today screen to show progress.
+     * The hue to print a figure in, which is not the hue to draw its mark in.
      *
-     * Heart points keep the heart, where it says what it measures rather than standing in
-     * for every metric at once. Steps get footprints and calories a flame.
+     * Only the three gauge metrics have one: the rest are never printed in colour.
      */
-    val emblem: Emblem
-        get() = when (this) {
-            CALORIES -> Emblem.CALORIES
-            HEART_POINTS -> Emblem.HEART_POINTS
-            else -> Emblem.STEPS
-        }
+    fun textColor(viz: VizColors): Color = when (this) {
+        STEPS -> viz.stepsText
+        CALORIES -> viz.caloriesText
+        HEART_POINTS -> viz.heartPointsText
+        else -> color(viz)
+    }
 
     fun color(viz: VizColors): Color = when (this) {
         STEPS -> viz.steps

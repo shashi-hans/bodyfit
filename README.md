@@ -11,7 +11,7 @@ network client and no analytics in the app.
 
 | Tab | What it holds |
 | --- | --- |
-| 🏠 Today | App name and greeting across the top, then one emblem per metric (footprints, a flame, a heart), each filling from the bottom as its goal is approached, with the value, name and goal under each, then water beside its add buttons, a box holding distance and move minutes, and a second holding BMI and wellbeing that opens their working |
+| 🏠 Today | App name and greeting across the top, then the day's figures on the left beside their icons, each printed in its own colour, with three nested rings on the right, then water beside its add buttons, a box holding distance and move minutes, and a second holding BMI and wellbeing that opens their working |
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 🏋️ Exercise | Box breathing, running, cycling and skipping, and today's logged sessions |
 | 📈 Trends | One metric at a time over Day, Week or Month. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Arrows step back and forward a span at a time, back only as far as there is data. Tapping a bar in Week or Month opens that day hour by hour |
@@ -203,15 +203,23 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 
 ## Chart colors
 
-The Today card carries one emblem per metric: footprints for steps in green, a flame for
-calories in yellow, a heart for heart points in red. Each is outlined in its own colour and
-fills from the bottom in proportion to its goal, with its value, name and goal underneath.
+The Today card carries the day's figures on the left and three nested rings on the right:
+steps green, calories yellow, heart points red. Each figure sits beside its own icon,
+footprints, a flame and a heart, and is printed in its ring's colour so the two pair
+without counting inwards from the outside.
 
-All three are paths rather than rendered vectors, because an outline needs geometry to
-stroke. The heart is generated from its parametric curve; the footprints carry the same
-path data as `ic_footsteps`, and the flame is drawn in `ic_flame` for this purpose, so the
-emblem on the card and the icon elsewhere are the same shape. The outline is what lets an
-almost-empty emblem still say which metric it belongs to. The outline means an empty heart still reads as its metric
+A circle's perimeter is uniform, so a given share of the goal is always the same length of
+arc. The shapes tried before this could not manage that. A heart traced by a band has an
+uneven perimeter, and emblems filling from the bottom have an uneven area: a heart is
+narrow at its point and wide at its lobes, so filling half its height covers well under
+half its ink, while a flame does the reverse. Three metrics at the same percentage looked
+different on each. The icons stay, beside the figures, carrying identity without also being
+asked to carry measurement.
+
+The figures are printed in text-safe shades of the three hues rather than the hues
+themselves. A colour that passes as a mark need not pass as a figure: measured against the
+card, the mark colours give 1.90:1 for calories in light and 3.45:1 for steps in dark, well
+under the 4.5:1 body text needs. The text variants clear 5:1 in both themes. The outline means an empty heart still reads as its metric
 rather than as a grey blank, and the goal gives the fill level a scale to be read against.
 
 Three nested bands round one outline came first and were dropped: a share of the goal is

@@ -49,7 +49,7 @@ import app.bodyfit.ui.components.BreathingDialog
 import app.bodyfit.ui.components.GaugeArc
 import app.bodyfit.ui.components.Glyph
 import app.bodyfit.ui.components.SectionHeader
-import app.bodyfit.ui.components.HeartGauge
+import app.bodyfit.ui.components.TodayGauge
 import app.bodyfit.ui.components.StatCard
 import app.bodyfit.ui.theme.LocalViz
 import java.time.LocalDate
@@ -94,18 +94,18 @@ fun TodayScreen(
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    HeartGauge(
+                    TodayGauge(
                         arcs = Metric.GAUGE_ARCS.map { metric ->
                             GaugeArc(
                                 emoji = metric.emoji,
                                 iconRes = metric.iconRes,
                                 vector = metric.vector,
-                                emblem = metric.emblem,
                                 label = metric.label,
                                 value = metric.formatWithUnit(metric.value(record, settings)),
                                 goalLabel = metric.formatWithUnit(metric.dailyGoal(settings)),
                                 progress = progressOf(metric, record, settings),
                                 color = metric.color(viz),
+                                textColor = metric.textColor(viz),
                             )
                         },
                     )
