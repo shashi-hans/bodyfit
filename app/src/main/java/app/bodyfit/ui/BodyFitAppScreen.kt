@@ -347,7 +347,7 @@ fun BodyFitAppScreen(
                     ExerciseScreen(
                         sessions = sessions,
                         onStart = { viewModel.startExercise() },
-                        onStop = viewModel::stopExercise,
+                        onStop = { type, startedAt, seconds, met -> viewModel.stopExercise(type, startedAt, seconds, met) },
                         onDelete = viewModel::deleteExercise,
                         onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,

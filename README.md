@@ -32,15 +32,32 @@ are kept as rows as well as folded in because a calorie figure with no explanati
 checkable: a user who sees 300 kcal appear should be able to find the ride that caused it.
 Removing a session takes its contribution back off the day.
 
-| Activity | MET | Produces steps |
-| --- | --- | --- |
-| Running | 8.0 | yes |
-| Cycling | 7.0 | no |
-| Skipping | 11.0 | no |
+| Activity | MET | Produces steps | Effort |
+| --- | --- | --- | --- |
+| Running | 8.0 | yes | assumed |
+| Cycling | 7.0 | no | assumed |
+| Skipping | from the jump rate | no | measured |
 
-Effort is assumed rather than measured: the app has no way to know how hard a ride was, so
-a moderate effort is taken and the screen says so. Calories use the same `(MET - 1)` basis
-as a walked minute, so a logged session and a tracked one mean the same thing.
+Calories use the same `(MET - 1)` basis as a walked minute, so a logged session and a
+tracked one mean the same thing.
+
+Skipping is the one activity whose intensity the phone can actually measure. A rope jump
+is a large periodic bounce, which is the signal `SoftwarePedometer` already detects for
+steps, so jumps are counted by the same peak detector on different bounds: at least 2.5
+m/s^2 and no closer together than 280 ms, which caps the rate at about 210 a minute. The
+measured rate picks a MET from the compendium's three paces, 8.8 at 80 jumps a minute,
+11.8 at 110 and 12.3 at 140, interpolated between them.
+
+Running and cycling stay assumed. A run's intensity is already visible in its cadence
+through the step counter, but the app's MET curve stops at walking and a running curve is
+different research. Cycling cannot be measured at all from a phone: the accelerometer sees
+vibration rather than body motion, and speed cannot be recovered from acceleration because
+the integration drifts within seconds.
+
+Every session is paused automatically whenever the phone stops moving for three seconds,
+and only time spent moving is billed. Waiting at a crossing is not exercise. Three seconds
+rather than one because the top of a jump is briefly weightless and would otherwise read
+as a stop.
 
 While a session runs the tracker still counts steps but stops scoring its 60-second
 windows. Without that a run would be billed twice, once through its steps and once through

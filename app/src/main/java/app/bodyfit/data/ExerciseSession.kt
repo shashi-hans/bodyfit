@@ -29,14 +29,17 @@ enum class ExerciseType(
      * Activity calories for [minutes] at [weightKg], on the same `(MET - 1)` basis as the
      * step tracker, so a logged session and a walked minute mean the same thing.
      */
-    fun kcal(minutes: Double, weightKg: Int): Double =
-        (met - 1.0).coerceAtLeast(0.0) * 3.5 * weightKg / 200.0 * minutes
+    fun kcal(minutes: Double, weightKg: Int, measuredMet: Double? = null): Double =
+        ((measuredMet ?: met) - 1.0).coerceAtLeast(0.0) * 3.5 * weightKg / 200.0 * minutes
 
     /** Heart points for [minutes], on the same bands the tracker scores cadence against. */
-    fun heartPoints(minutes: Double): Int = when {
-        met >= 6.0 -> (minutes * 2).toInt()
-        met >= 3.0 -> minutes.toInt()
-        else -> 0
+    fun heartPoints(minutes: Double, measuredMet: Double? = null): Int {
+        val effective = measuredMet ?: met
+        return when {
+            effective >= 6.0 -> (minutes * 2).toInt()
+            effective >= 3.0 -> minutes.toInt()
+            else -> 0
+        }
     }
 
     companion object {

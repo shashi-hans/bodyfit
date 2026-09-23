@@ -111,11 +111,20 @@ class HealthRepository(context: Context) {
     /**
      * Records a finished exercise and folds it into the day.
      *
+     * [seconds] is time spent moving, not wall-clock time: a session paused at a traffic
+     * light is not billed for standing there. [measuredMet] replaces the activity's assumed
+     * effort where the accelerometer could measure it, which today means skipping.
+     *
      * A session under [MIN_SESSION_SECONDS] is discarded: it is a mis-tap, and logging a
      * four-second run would put a stray row in the list and a rounding error in the totals.
      * Returns the session written, or null when it was too short.
      */
-    suspend fun stopSession(type: ExerciseType, startedAt: Long, seconds: Int): ExerciseSession? {
+    suspend fun stopSession(
+        type: ExerciseType,
+        startedAt: Long,
+        seconds: Int,
+        measuredMet: Double? = null,
+    ): ExerciseSession? {
         trackerState.setSessionStartedAt(0L)
         if (seconds < MIN_SESSION_SECONDS) return null
         val minutes = seconds / 60.0
@@ -125,8 +134,8 @@ class HealthRepository(context: Context) {
             type = type.name,
             startedAt = startedAt,
             seconds = seconds,
-            kcal = type.kcal(minutes, weight),
-            heartPoints = type.heartPoints(minutes),
+            kcal = type.kcal(minutes, weight, measuredMet),
+            heartPoints = type.heartPoints(minutes, measuredMet),
         )
         dao.addSession(session, moveMinutes = minutes.toInt())
         return session

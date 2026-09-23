@@ -85,8 +85,13 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
 
     fun startExercise() = viewModelScope.launch { repository.startSession() }
 
-    fun stopExercise(type: ExerciseType, startedAt: Long, seconds: Int) = viewModelScope.launch {
-        repository.stopSession(type, startedAt, seconds)
+    fun stopExercise(
+        type: ExerciseType,
+        startedAt: Long,
+        seconds: Int,
+        measuredMet: Double? = null,
+    ) = viewModelScope.launch {
+        repository.stopSession(type, startedAt, seconds, measuredMet)
     }
 
     fun deleteExercise(session: ExerciseSession) = viewModelScope.launch {

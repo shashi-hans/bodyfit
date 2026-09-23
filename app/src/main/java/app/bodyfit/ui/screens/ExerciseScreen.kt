@@ -22,6 +22,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -31,11 +37,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import app.bodyfit.data.ExerciseSession
 import app.bodyfit.data.ExerciseType
 import app.bodyfit.data.HealthRepository
+import app.bodyfit.sensor.SessionMonitor
+import app.bodyfit.sensor.skippingMet
 import app.bodyfit.ui.components.BreathingDialog
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.SettingsCard
@@ -53,7 +63,7 @@ import java.util.Locale
 fun ExerciseScreen(
     sessions: List<ExerciseSession>,
     onStart: (ExerciseType) -> Unit,
-    onStop: (ExerciseType, Long, Int) -> Unit,
+    onStop: (ExerciseType, Long, Int, Double?) -> Unit,
     onDelete: (ExerciseSession) -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
@@ -149,8 +159,8 @@ fun ExerciseScreen(
     running?.let { type ->
         TimerDialog(
             type = type,
-            onDone = { startedAt, seconds ->
-                onStop(type, startedAt, seconds)
+            onDone = { startedAt, seconds, measuredMet ->
+                onStop(type, startedAt, seconds, measuredMet)
                 running = null
             },
         )
@@ -227,29 +237,71 @@ private fun SessionRow(session: ExerciseSession, onDelete: () -> Unit) {
 }
 
 /**
- * The running clock for one exercise.
+ * The running clock for one exercise, paused whenever the phone stops moving.
  *
- * Elapsed time is taken from the wall clock rather than counted up, so a tick the system
- * delays or drops does not lose time from the session.
+ * Elapsed time is accumulated from wall-clock deltas while movement is happening, rather
+ * than counted from the start, so a session is billed for the time spent exercising and a
+ * dropped tick loses nothing. Standing at a crossing does not earn calories.
+ *
+ * For skipping the same signal counts jumps, and the rate replaces the assumed effort with
+ * a measured one.
  */
 @Composable
-private fun TimerDialog(type: ExerciseType, onDone: (Long, Int) -> Unit) {
-    val startedAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var seconds by remember { mutableIntStateOf(0) }
+private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?) -> Unit) {
+    val context = LocalContext.current
+    val startedAt = remember { System.currentTimeMillis() }
+    val monitor = remember(type) { SessionMonitor(countJumps = type == ExerciseType.SKIPPING) }
+
+    var activeMs by remember { mutableLongStateOf(0L) }
+    var moving by remember { mutableStateOf(true) }
+    var jumps by remember { mutableIntStateOf(0) }
+
+    // Registered for the life of the dialog only. A session is bounded, so streaming the
+    // accelerometer for it is a fair trade in a way an always-on listener would not be.
+    DisposableEffect(type) {
+        val sensors = context.getSystemService(SensorManager::class.java)
+        val accelerometer = sensors?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                if (event.values.size < 3) return
+                monitor.onSample(
+                    System.currentTimeMillis(),
+                    event.values[0],
+                    event.values[1],
+                    event.values[2],
+                )
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        if (accelerometer != null) {
+            sensors.registerListener(listener, accelerometer, SAMPLE_US, BATCH_US)
+        }
+        onDispose { sensors?.unregisterListener(listener) }
+    }
 
     LaunchedEffect(startedAt) {
+        var last = System.currentTimeMillis()
         while (true) {
-            delay(250)
-            seconds = ((System.currentTimeMillis() - startedAt) / 1000L).toInt()
+            delay(TICK_MS)
+            val now = System.currentTimeMillis()
+            // Only time spent moving is added, which is what makes the pause a pause
+            // rather than a label over a clock that keeps running.
+            if (monitor.moving) activeMs += now - last
+            last = now
+            moving = monitor.moving
+            jumps = monitor.jumps
         }
     }
 
-    androidx.compose.material3.AlertDialog(
+    val seconds = (activeMs / 1000L).toInt()
+    val minutes = seconds / 60.0
+    val rate = if (minutes > 0) jumps / minutes else 0.0
+    val measuredMet = if (type == ExerciseType.SKIPPING && jumps > 0) skippingMet(rate) else null
+
+    AlertDialog(
         onDismissRequest = { },
-        properties = androidx.compose.ui.window.DialogProperties(
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
-        ),
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
         title = { Text("${type.emoji}  ${type.label}") },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -258,6 +310,28 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int) -> Unit) {
                     style = MaterialTheme.typography.displayMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+                Text(
+                    text = if (moving) "Counting" else "Paused, no movement",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (type == ExerciseType.SKIPPING) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "$jumps jumps",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = if (jumps > 0) {
+                            "${rate.toInt()} a minute, measured"
+                        } else {
+                            "Counting jumps from the accelerometer"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = type.description,
@@ -268,8 +342,8 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int) -> Unit) {
                 if (seconds < HealthRepository.MIN_SESSION_SECONDS) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Under ${HealthRepository.MIN_SESSION_SECONDS} seconds is " +
-                            "discarded rather than logged.",
+                        text = "Under ${HealthRepository.MIN_SESSION_SECONDS} seconds of " +
+                            "movement is discarded rather than logged.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -278,13 +352,21 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int) -> Unit) {
             }
         },
         confirmButton = {
-            Button(onClick = { onDone(startedAt, seconds) }) { Text("Stop and save") }
+            Button(onClick = { onDone(startedAt, seconds, measuredMet) }) { Text("Stop and save") }
         },
         dismissButton = {
-            OutlinedButton(onClick = { onDone(startedAt, 0) }) { Text("Discard") }
+            OutlinedButton(onClick = { onDone(startedAt, 0, null) }) { Text("Discard") }
         },
     )
 }
+
+/** 25 Hz, enough to resolve a jump without streaming needless samples. */
+private const val SAMPLE_US = 40_000
+
+/** A quarter second of buffering, which the clock ticks at anyway. */
+private const val BATCH_US = 250_000
+
+private const val TICK_MS = 250L
 
 /** Seconds as m:ss, or h:mm:ss once an exercise runs past the hour. */
 private fun clock(seconds: Int): String {
