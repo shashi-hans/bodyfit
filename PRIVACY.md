@@ -28,9 +28,23 @@ Body Fit stores the following on your device:
 In a database and a settings file inside the app's own private storage on your phone.
 Android prevents other apps from reading them.
 
+## Location
+
+If you start a running or cycling session and allow it, the app reads your location while
+that session is open, to work out how fast you are going. It is used to pick an effort
+level and is then discarded.
+
+**No coordinate is saved.** The session records how long you exercised, how far you went
+and the calories estimated from that. It does not record where you were, and the app holds
+no route or map of any kind.
+
+Location is asked for when you start such a session, not when you open the app, and
+refusing it only means the session uses an assumed effort instead of a measured one.
+Everything else works exactly the same.
+
 ## What leaves your phone
 
-Nothing.
+Nothing, including your location.
 
 The app declares no internet permission, so it is technically incapable of sending your
 data anywhere. It contains no network code, no analytics library and no crash reporting.
@@ -63,8 +77,9 @@ no account to close.
 | Notifications (`POST_NOTIFICATIONS`) | To show the lock-screen card with your daily totals. |
 | Foreground service (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH`) | To keep counting steps while the app is closed. Android requires a visible notification for this. |
 | Run at startup (`RECEIVE_BOOT_COMPLETED`) | To resume counting after you restart your phone. |
+| Location (`ACCESS_FINE_LOCATION`) | To measure speed during a running or cycling session you started. Optional, used only while that session is open, and no coordinate is stored. |
 
-The app requests no location, no camera, no contacts, no storage and no internet access.
+The app requests no camera, no contacts, no storage and no internet access.
 
 ## Children
 

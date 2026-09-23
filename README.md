@@ -36,11 +36,11 @@ are kept as rows as well as folded in because a calorie figure with no explanati
 checkable: a user who sees 300 kcal appear should be able to find the ride that caused it.
 Removing a session takes its contribution back off the day.
 
-| Activity | MET | Produces steps | Effort |
-| --- | --- | --- | --- |
-| Running | 8.0 | yes | assumed |
-| Cycling | 7.0 | no | assumed |
-| Skipping | from the jump rate | no | measured |
+| Activity | Produces steps | Effort |
+| --- | --- | --- |
+| Running | yes | GPS speed, else 8.0 assumed |
+| Cycling | no | GPS speed, else 7.0 assumed |
+| Skipping | no | jump rate from the accelerometer |
 
 Calories use the same `(MET - 1)` basis as a walked minute, so a logged session and a
 tracked one mean the same thing.
@@ -52,11 +52,20 @@ m/s^2 and no closer together than 280 ms, which caps the rate at about 210 a min
 measured rate picks a MET from the compendium's three paces, 8.8 at 80 jumps a minute,
 11.8 at 110 and 12.3 at 140, interpolated between them.
 
-Running and cycling stay assumed. A run's intensity is already visible in its cadence
-through the step counter, but the app's MET curve stops at walking and a running curve is
-different research. Cycling cannot be measured at all from a phone: the accelerometer sees
-vibration rather than body motion, and speed cannot be recovered from acceleration because
-the integration drifts within seconds.
+Running and cycling are measured by GPS where the phone has a receiver and the user allows
+it. Speed picks a MET from the compendium's speed bands: running anchored at 8, 10, 12 and
+14 km/h, cycling at 16, 20, 25 and 30, interpolated between. Without a receiver, without
+permission, or before 50 m has been covered, the assumed figure is used and the timer says
+which is in force.
+
+No coordinate is stored. Fixes are consumed for distance and dropped, and the session row
+holds duration, distance and calories: how far and how fast, never where. A route trace is
+a different category of data from a step count, and the app does not hold one.
+
+Fixes worse than 35 m of accuracy are ignored, and a hop implying more than 80 km/h is
+treated as two bad fixes rather than a sprint. Location is requested when a running or
+cycling session starts rather than at launch, so the reason is on screen when the prompt
+appears, and a refusal starts the session anyway on the assumed effort.
 
 Every session is paused automatically whenever the phone stops moving for three seconds,
 and only time spent moving is billed. Waiting at a crossing is not exercise. Three seconds

@@ -20,7 +20,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import android.Manifest
+import android.location.LocationListener
+import android.location.LocationManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -29,6 +34,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +49,11 @@ import androidx.compose.ui.unit.dp
 import app.bodyfit.data.ExerciseSession
 import app.bodyfit.data.ExerciseType
 import app.bodyfit.data.HealthRepository
+import app.bodyfit.sensor.Permissions
 import app.bodyfit.sensor.SessionMonitor
+import app.bodyfit.sensor.SpeedMonitor
+import app.bodyfit.sensor.cyclingMet
+import app.bodyfit.sensor.runningMet
 import app.bodyfit.sensor.skippingMet
 import app.bodyfit.ui.components.BreathingDialog
 import app.bodyfit.ui.components.SectionHeader
@@ -67,8 +77,23 @@ fun ExerciseScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     var breathing by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf<ExerciseType?>(null) }
+    var pendingLocation by remember { mutableStateOf<ExerciseType?>(null) }
+
+    // Asked at the moment it is used rather than at launch, so the reason is on screen when
+    // the prompt appears. A refusal starts the session anyway, on an assumed effort: the
+    // session is the point, and the measurement is the improvement.
+    val locationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        pendingLocation?.let { type ->
+            running = type
+            onStart(type)
+            pendingLocation = null
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -92,8 +117,18 @@ fun ExerciseScreen(
                         name = type.label,
                         description = type.description,
                         onClick = {
-                            running = type
-                            onStart(type)
+                            val wantsSpeed =
+                                type == ExerciseType.RUNNING || type == ExerciseType.CYCLING
+                            if (wantsSpeed &&
+                                Permissions.hasGps(context) &&
+                                !Permissions.hasLocation(context)
+                            ) {
+                                pendingLocation = type
+                                locationLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            } else {
+                                running = type
+                                onStart(type)
+                            }
                         },
                     )
                 }
@@ -235,6 +270,14 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?) -> Unit
     var activeMs by remember { mutableLongStateOf(0L) }
     var moving by remember { mutableStateOf(true) }
     var jumps by remember { mutableIntStateOf(0) }
+    var kmh by remember { mutableDoubleStateOf(0.0) }
+    var metres by remember { mutableDoubleStateOf(0.0) }
+
+    // Speed is only worth measuring where distance is the effort. Skipping goes nowhere,
+    // and asking for location during it would be a permission with no purpose.
+    val wantsSpeed = type == ExerciseType.RUNNING || type == ExerciseType.CYCLING
+    val canMeasure = remember(type) { wantsSpeed && Permissions.canMeasureSpeed(context) }
+    val speed = remember(type) { SpeedMonitor() }
 
     // Registered for the life of the dialog only. A session is bounded, so streaming the
     // accelerometer for it is a fair trade in a way an always-on listener would not be.
@@ -260,6 +303,30 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?) -> Unit
         onDispose { sensors?.unregisterListener(listener) }
     }
 
+    // Registered for the life of the dialog only, and the fixes are consumed for distance
+    // and dropped. No coordinate reaches the database or leaves this composable.
+    DisposableEffect(canMeasure) {
+        if (!canMeasure) return@DisposableEffect onDispose { }
+        val manager = context.getSystemService(LocationManager::class.java)
+        val listener = LocationListener { location ->
+            speed.onFix(
+                timestampMs = System.currentTimeMillis(),
+                latitude = location.latitude,
+                longitude = location.longitude,
+                accuracyMetres = if (location.hasAccuracy()) location.accuracy else Float.MAX_VALUE,
+            )
+        }
+        runCatching {
+            manager?.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                FIX_INTERVAL_MS,
+                FIX_DISTANCE_M,
+                listener,
+            )
+        }
+        onDispose { runCatching { manager?.removeUpdates(listener) } }
+    }
+
     LaunchedEffect(startedAt) {
         var last = System.currentTimeMillis()
         while (true) {
@@ -271,13 +338,21 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?) -> Unit
             last = now
             moving = monitor.moving
             jumps = monitor.jumps
+            kmh = speed.averageKmh
+            metres = speed.metres
         }
     }
 
     val seconds = (activeMs / 1000L).toInt()
     val minutes = seconds / 60.0
     val rate = if (minutes > 0) jumps / minutes else 0.0
-    val measuredMet = if (type == ExerciseType.SKIPPING && jumps > 0) skippingMet(rate) else null
+    val measuredMet = when {
+        type == ExerciseType.SKIPPING && jumps > 0 -> skippingMet(rate)
+        // A handful of metres is a phone settling on a fix, not a session worth costing.
+        canMeasure && metres >= MIN_MEASURED_METRES && type == ExerciseType.RUNNING -> runningMet(kmh)
+        canMeasure && metres >= MIN_MEASURED_METRES && type == ExerciseType.CYCLING -> cyclingMet(kmh)
+        else -> null
+    }
 
     AlertDialog(
         onDismissRequest = { },
@@ -295,6 +370,33 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?) -> Unit
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (wantsSpeed) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = when {
+                            !canMeasure -> "Effort assumed"
+                            metres < MIN_MEASURED_METRES -> "Waiting for a GPS fix"
+                            else -> String.format(
+                                Locale.getDefault(),
+                                "%.2f km at %.1f km/h",
+                                metres / 1000.0,
+                                kmh,
+                            )
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = if (canMeasure) {
+                            "Speed measured by GPS. No location is stored."
+                        } else {
+                            "No GPS access, so the effort in the description is used."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 if (type == ExerciseType.SKIPPING) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -347,6 +449,15 @@ private const val SAMPLE_US = 40_000
 private const val BATCH_US = 250_000
 
 private const val TICK_MS = 250L
+
+/** A fix every two seconds is plenty for an average, and far cheaper than the maximum rate. */
+private const val FIX_INTERVAL_MS = 2_000L
+
+/** No minimum displacement: the filtering that matters is on accuracy, not distance. */
+private const val FIX_DISTANCE_M = 0f
+
+/** Below this the phone is still finding itself, not covering ground. */
+private const val MIN_MEASURED_METRES = 50.0
 
 /** Seconds as m:ss, or h:mm:ss once an exercise runs past the hour. */
 private fun clock(seconds: Int): String {

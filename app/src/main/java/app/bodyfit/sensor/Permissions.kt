@@ -44,6 +44,21 @@ object Permissions {
     private fun sensor(context: Context, type: Int): Boolean =
         context.getSystemService(SensorManager::class.java)?.getDefaultSensor(type) != null
 
+    /**
+     * Whether this phone has a GNSS receiver at all.
+     *
+     * Asked before the permission, because prompting for access to hardware that is not
+     * fitted would be a question with no useful answer.
+     */
+    fun hasGps(context: Context): Boolean =
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_LOCATION_GPS)
+
+    fun hasLocation(context: Context): Boolean =
+        granted(context, Manifest.permission.ACCESS_FINE_LOCATION)
+
+    /** True when a session can actually measure its speed rather than assume its effort. */
+    fun canMeasureSpeed(context: Context): Boolean = hasGps(context) && hasLocation(context)
+
     fun hasActivityRecognition(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
             granted(context, Manifest.permission.ACTIVITY_RECOGNITION)

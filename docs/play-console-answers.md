@@ -14,6 +14,7 @@ third party. Body Fit does neither, so almost every answer is no.
 | Question | Answer | Why |
 | --- | --- | --- |
 | Does your app collect or share any of the required user data types? | **No** | No internet permission is declared, so transmission is impossible (`AndroidManifest.xml`) |
+| Does your app access location? | **Yes, but does not collect it** | Read during a running or cycling session to compute speed, then discarded. No coordinate is stored and none can be transmitted |
 | Is all user data encrypted in transit? | **N/A** | Nothing is transmitted |
 | Do you provide a way for users to request data deletion? | **Yes** | Uninstalling removes everything; there is no account and no server copy |
 | Does your app collect data from children? | **No** | It collects nothing from anyone |
@@ -25,7 +26,10 @@ because it is never transmitted.
 
 Supporting facts, each checkable in the repo:
 
-- No `INTERNET` permission.
+- No `INTERNET` permission, so no data of any kind can leave the device, location included.
+- Location is read only while a running or cycling session is open, and the fixes are
+  consumed for distance and dropped (`sensor/SpeedMonitor.kt`). The session row holds
+  duration, distance and calories, never coordinates (`data/ExerciseSession.kt`).
 - No HTTP client, no analytics SDK, no crash reporter. Dependencies are Compose, Room,
   DataStore and Lifecycle only (`app/build.gradle.kts`).
 - `android:allowBackup="false"`, so Android's own backup does not copy health data to the
@@ -41,6 +45,7 @@ Supporting facts, each checkable in the repo:
 | `POST_NOTIFICATIONS` | The lock-screen card showing daily totals, and the foreground service notification Android requires. |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH` | Counting steps while the app is closed. The `health` type is the correct one: the service reads a health sensor. |
 | `RECEIVE_BOOT_COMPLETED` | Resuming step counting after a restart. |
+| `ACCESS_FINE_LOCATION` | Measuring speed during a running or cycling session the user starts, to estimate effort. Requested at the session, not at launch. Optional: refusing falls back to an assumed effort. No coordinate is stored or transmitted. |
 
 ## Foreground service declaration
 
