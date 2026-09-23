@@ -4,21 +4,13 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,22 +18,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.bodyfit.ui.theme.LocalViz
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
 
-/** One band of the gauge: how far round it has gone, and what to call it beside it. */
+/** One heart of the gauge: how full it is, and what to call it underneath. */
 data class GaugeArc(
     val emoji: String,
     @DrawableRes val iconRes: Int? = null,
@@ -56,172 +42,106 @@ data class GaugeArc(
 )
 
 /**
- * The day's figures on the left, a heart of three thin nested bands on the right.
+ * One heart per metric, each filling from the bottom as its goal is approached.
  *
- * The heart is the classic parametric outline, `x = 16 sin^3 t` and
- * `y = 13 cos t - 5 cos 2t - 2 cos 3t - cos 4t`, sampled into a path and scaled to its
- * half of the row. Each band is that outline shrunk by one stroke plus a gap, so the three
- * stay evenly spaced whatever the size.
+ * A fill level is read at a glance; a position along a curve is not. Three nested outlines
+ * shared one path, so 70% and 90% ended up looking alike and all three crowded together
+ * where the shape narrows. One shape per metric removes both problems and lets each carry
+ * its colour outright rather than as a thin line.
  *
- * Progress runs from the bottom point and up the right side, which is where the eye starts
- * on a heart. A band stops at a full lap when its goal is beaten; the surplus is reported
- * by the figures rather than by a second lap, so a band always means "how much of the
- * goal" and never an ambiguous overlap.
- *
- * Three bands is the cap. The hues are the only set that stays distinguishable for
- * colorblind readers in both themes, and every band is named in the list beside it, so
- * identity never rests on color alone.
+ * The hues are the only set that stays distinguishable for colorblind readers in both
+ * themes, and every heart is named underneath, so identity never rests on colour alone.
  */
 @Composable
-fun HeartGauge(
-    arcs: List<GaugeArc>,
-    modifier: Modifier = Modifier,
-    strokeWidth: Dp = 5.dp,
-    arcGap: Dp = 6.dp,
-) {
+fun HeartGauge(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
     val trackColor = LocalViz.current.track
     val animated = arcs.map { arc ->
         animateFloatAsState(
             targetValue = arc.progress.coerceIn(0f, 1f),
             animationSpec = tween(durationMillis = 700),
-            label = "band-${arc.label}",
+            label = "heart-${arc.label}",
         )
     }
 
     Row(
         modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        GaugeLegend(arcs = arcs, modifier = Modifier.weight(1f))
-
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .aspectRatio(HEART_ASPECT),
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val stroke = strokeWidth.toPx()
-                val gap = arcGap.toPx()
-                // Fit whichever axis is tighter, so the shape keeps its proportions rather
-                // than being stretched to the box.
-                val outerScale = minOf(
-                    (size.width - stroke) / HEART_WIDTH,
-                    (size.height - stroke) / HEART_HEIGHT,
-                )
-                val middle = Offset(size.width / 2f, size.height / 2f)
-                val measure = PathMeasure()
-
-                arcs.forEachIndexed { index, arc ->
-                    // Shrinking the scale by (stroke + gap) / half-width moves the outline
-                    // in by exactly that much at its widest point.
-                    val scale = outerScale - index * (stroke + gap) / (HEART_WIDTH / 2f)
-                    if (scale <= 0f) return@forEachIndexed
-
-                    val path = heartPath(middle, scale)
-                    drawPath(
-                        path = path,
-                        color = trackColor,
-                        style = Stroke(width = stroke, cap = StrokeCap.Round),
-                    )
-
-                    val progress = animated[index].value
-                    if (progress <= 0f) return@forEachIndexed
-                    measure.setPath(path, false)
-                    val drawn = Path()
-                    measure.getSegment(0f, measure.length * progress, drawn, true)
-                    drawPath(
-                        path = drawn,
-                        color = arc.color,
-                        style = Stroke(width = stroke, cap = StrokeCap.Round),
-                    )
+        arcs.forEachIndexed { index, arc ->
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
+                ) {
+                    val path = heartPath(size)
+                    drawPath(path, trackColor)
+                    // Clipping to the outline and filling a rectangle upward from the
+                    // bottom is what makes the level follow the shape: the water line
+                    // stays flat while the vessel around it narrows.
+                    clipPath(path) {
+                        val filled = size.height * animated[index].value
+                        drawRect(
+                            color = arc.color,
+                            topLeft = Offset(0f, size.height - filled),
+                            size = Size(size.width, filled),
+                        )
+                    }
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = arc.value,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = arc.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
 }
 
 /**
- * One row per band: its icon in the band's own colour, then the value over its goal.
+ * A heart with a rounded base rather than a point, filling [box].
  *
- * The icon carries the hue, so the separate colour dot that used to sit beside it is gone:
- * two marks for one identity is one too many. Stacked rather than spread across the width,
- * because the list has half the row to live in and "Heart points" does not fit beside two
- * siblings in that space.
- */
-@Composable
-private fun GaugeLegend(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        arcs.forEach { arc ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Glyph(
-                    emoji = arc.emoji,
-                    iconRes = arc.iconRes,
-                    vector = arc.vector,
-                    size = 22.dp,
-                    tint = arc.color,
-                )
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = arc.value,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = "of ${arc.goalLabel}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Samples enough to hide the straight segments at this size. */
-private const val HEART_SAMPLES = 240
-
-/**
- * The outline sampled once in its own units, starting at the bottom point and running up
- * the right side.
+ * Built from cubics rather than the usual `x = 16 sin^3 t` parametric, which meets itself
+ * at the bottom in a corner and cannot be rounded without cutting the shape about. Here
+ * the two flanks stop short of the centre and a separate curve sweeps between them, so the
+ * base is a smooth arc.
  *
- * Sampled rather than described by constants because the curve's extent is not obvious:
- * the lobes peak near y = 11.9, not at the y = 5 the formula reaches at t = 0, and a
- * height guessed from that endpoint clips them.
+ * Coordinates are a unit box, x and y in -1 to 1 with y upward, mapped onto [box] at the
+ * end. That keeps the control points readable as proportions of the shape.
  */
-private val HEART_POINTS: List<Offset> = List(HEART_SAMPLES + 1) { i ->
-    val t = PI - (i.toDouble() / HEART_SAMPLES) * 2 * PI
-    Offset(
-        (16.0 * sin(t).pow(3)).toFloat(),
-        (13.0 * cos(t) - 5.0 * cos(2 * t) - 2.0 * cos(3 * t) - cos(4 * t)).toFloat(),
-    )
-}
+private fun heartPath(box: Size): Path {
+    fun px(x: Float) = (x + 1f) / 2f * box.width
+    fun py(y: Float) = (1f - y) / 2f * box.height
 
-private val HEART_WIDTH = HEART_POINTS.maxOf { it.x } - HEART_POINTS.minOf { it.x }
-private val HEART_HEIGHT = HEART_POINTS.maxOf { it.y } - HEART_POINTS.minOf { it.y }
-private val HEART_MID_X = (HEART_POINTS.maxOf { it.x } + HEART_POINTS.minOf { it.x }) / 2f
-private val HEART_MID_Y = (HEART_POINTS.maxOf { it.y } + HEART_POINTS.minOf { it.y }) / 2f
-
-/** About 1.11: a shade wider than tall. */
-private val HEART_ASPECT = HEART_WIDTH / HEART_HEIGHT
-
-/** The outline centred on [middle] at [scale] pixels per unit. */
-private fun heartPath(middle: Offset, scale: Float): Path {
-    val path = Path()
-    HEART_POINTS.forEachIndexed { i, point ->
-        val px = middle.x + (point.x - HEART_MID_X) * scale
-        // Screen y grows downward, so the shape is flipped as it is placed.
-        val py = middle.y - (point.y - HEART_MID_Y) * scale
-        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+    return Path().apply {
+        // Bottom right, where the rounded base begins.
+        moveTo(px(0.30f), py(-0.70f))
+        // The base itself, sweeping left. Both control points sit below the ends, which is
+        // what turns the meeting of the two flanks into an arc instead of a V.
+        cubicTo(px(0.14f), py(-0.94f), px(-0.14f), py(-0.94f), px(-0.30f), py(-0.70f))
+        // Up the left flank.
+        cubicTo(px(-0.78f), py(-0.26f), px(-1.00f), py(0.08f), px(-1.00f), py(0.44f))
+        // Over the left lobe and down into the dip between them.
+        cubicTo(px(-1.00f), py(0.86f), px(-0.62f), py(1.00f), px(-0.32f), py(1.00f))
+        cubicTo(px(-0.10f), py(1.00f), px(0.00f), py(0.82f), px(0.00f), py(0.50f))
+        // Out of the dip and over the right lobe.
+        cubicTo(px(0.00f), py(0.82f), px(0.10f), py(1.00f), px(0.32f), py(1.00f))
+        cubicTo(px(0.62f), py(1.00f), px(1.00f), py(0.86f), px(1.00f), py(0.44f))
+        // Down the right flank to where the base began.
+        cubicTo(px(1.00f), py(0.08f), px(0.78f), py(-0.26f), px(0.30f), py(-0.70f))
+        close()
     }
-    path.close()
-    return path
 }

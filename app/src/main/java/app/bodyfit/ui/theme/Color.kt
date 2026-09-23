@@ -11,17 +11,21 @@ import androidx.compose.ui.graphics.Color
  * interface; these carry meaning, and they were picked against a rule: any hues that
  * appear on screen at the same time must stay apart for colorblind readers too.
  *
- * Three metrics get an arc on the Today screen: [steps] yellow, [calories] red and
- * [heartPoints] green. The remaining metrics, water included, are shown as neutral cards
+ * Three metrics get a band on the Today heart: [steps] green, [calories] yellow and
+ * [heartPoints] red, which puts the red on the heart's own metric. The remaining metrics, water included, are shown as neutral cards
  * there, and take their own hue only where they are the single colored thing on screen:
  * the water glass on its own tab, and the weekly chart, which draws one metric at a time.
  *
- * Yellow, red and green sit close together for colorblind readers, so the dark steps are
- * not the same hues dimmed: red is stepped to #CC4444 because the obvious #E66767 lands
+ * Yellow, red and green sit close together for colorblind readers, so the dark set is not
+ * the same hues dimmed: the red is stepped to #CC4444 because the obvious #E66767 lands
  * only 13.0 apart from the dark yellow in normal vision, under the floor of 15. The set
  * that ships clears every gate in both modes, with colorblind separation in the 6-8 band
- * that is allowed only because the gauge legend labels each arc by name and value.
- * Re-run scripts/validate_palette.js before changing any of these values.
+ * that is allowed only because the list beside the heart labels each band by name and
+ * value.
+ *
+ * Which metric wears which of the three is a free choice: swapping them is a permutation
+ * of the same set, so every pairwise separation is unchanged. Changing a hue value is not,
+ * and needs scripts/validate_palette.js re-run first.
  */
 @Immutable
 data class VizColors(
@@ -48,11 +52,11 @@ data class VizColors(
 )
 
 val LightViz = VizColors(
-    steps = Color(0xFFEDA100),
-    calories = Color(0xFFE34948),
+    steps = Color(0xFF008300),
+    calories = Color(0xFFEDA100),
     water = Color(0xFF2A78D6),
     distance = Color(0xFFE87BA4),
-    heartPoints = Color(0xFF008300),
+    heartPoints = Color(0xFFE34948),
     moveMinutes = Color(0xFF1BAF7A),
     track = Color(0xFFE7E5E0),
     grid = Color(0xFFEAE8E3),
@@ -63,11 +67,11 @@ val LightViz = VizColors(
 )
 
 val DarkViz = VizColors(
-    steps = Color(0xFFC98500),
-    calories = Color(0xFFCC4444),
+    steps = Color(0xFF008300),
+    calories = Color(0xFFC98500),
     water = Color(0xFF3987E5),
     distance = Color(0xFFD55181),
-    heartPoints = Color(0xFF008300),
+    heartPoints = Color(0xFFCC4444),
     moveMinutes = Color(0xFF199E70),
     track = Color(0xFF33332F),
     grid = Color(0xFF2E2E2B),

@@ -11,7 +11,7 @@ network client and no analytics in the app.
 
 | Tab | What it holds |
 | --- | --- |
-| 🏠 Today | App name and greeting across the top, then the day's step total and a list of steps, calories and heart points against their goals on the left, with a heart of three thin nested bands beside them on the right, then water beside its add buttons, one box holding distance, move minutes, BMI and wellbeing, and a box-breathing timer |
+| 🏠 Today | App name and greeting across the top, then one heart per metric (steps, calories, heart points), each filling from the bottom as its goal is approached, with the value and name under each, then water beside its add buttons, one box holding distance, move minutes, BMI and wellbeing, and a box-breathing timer |
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 📈 Trends | One metric at a time over Day, Week or Month. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Tapping a bar in Week or Month opens that day hour by hour |
 | 🩺 Health | BMI with its band, the wellbeing score with its rating, and the arithmetic that produced it line by line |
@@ -147,10 +147,14 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 
 ## Chart colors
 
-The Today heart carries three bands: steps yellow, calories red, heart points green. Each
-band is the same outline shrunk by one stroke plus a gap, and progress runs from the bottom
-point up the right side. It takes half the card, with the figures in the other half, so the
-shape is read alongside the numbers rather than above them.
+The Today card carries three hearts: steps green, calories yellow, heart points red. Each
+fills from the bottom in proportion to its goal, with its value and name underneath.
+
+Three nested bands round one outline came first and were dropped: a share of the goal is
+read as a position along a curve, which is far harder than a fill level, and the bands
+crowded together where the shape narrows. The base is rounded rather than pointed, which
+the usual `x = 16 sin^3 t` parametric cannot do, so the outline is built from cubics with
+the flanks stopping short of centre and a separate curve sweeping between them.
 Water, distance and move minutes are neutral cards there, and take their own hue only
 where they are the single colored thing on screen: the water glass on its own tab, and
 the weekly chart, which draws one metric at a time.
@@ -158,7 +162,8 @@ the weekly chart, which draws one metric at a time.
 Marks shown together must stay apart for colorblind readers, and yellow, red and green
 are the hardest set for that. The dark steps are therefore not the light hues dimmed:
 dark red is `#CC4444`, because the obvious `#E66767` lands 13.0 from the dark yellow in
-normal vision, under the floor of 15. The shipped set clears every gate in both modes,
+normal vision, under the floor of 15. Which metric wears which of the three is free to
+change: that is a permutation of the same set, so every pairwise separation is unchanged. The shipped set clears every gate in both modes,
 with colorblind separation in the 6-8 band that is permitted only because the legend
 names each arc with its value. Light-mode yellow also sits under 3:1 against the surface,
 which the same labels cover.

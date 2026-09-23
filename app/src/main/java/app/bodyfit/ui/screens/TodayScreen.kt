@@ -86,7 +86,7 @@ fun TodayScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 20.dp),
+                        .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     HeartGauge(
@@ -102,10 +102,9 @@ fun TodayScreen(
                                 color = metric.color(viz),
                             )
                         },
-                        modifier = Modifier.padding(horizontal = 16.dp),
                     )
                     Spacer(Modifier.height(16.dp))
-                    // The legend already prints each share of goal, so this line adds the
+                    // The hearts show the share of each goal, so this line adds the
                     // celebration and the week, not a second copy of the percentage.
                     if (stepProgress >= 1f) {
                         Text(
@@ -120,6 +119,7 @@ fun TodayScreen(
                             "${week.sumOf { it.heartPoints }} of ${settings.weeklyHeartPointGoal} heart points",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
