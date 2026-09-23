@@ -11,7 +11,7 @@ network client and no analytics in the app.
 
 | Tab | What it holds |
 | --- | --- |
-| 🏠 Today | App name and greeting across the top, then a heart drawn as three thin nested bands (steps, calories, heart points) against their daily goals, then water beside its add buttons, one box holding distance, move minutes, BMI and wellbeing, and a box-breathing timer |
+| 🏠 Today | App name and greeting across the top, then the day's step total and a list of steps, calories and heart points against their goals on the left, with a heart of three thin nested bands beside them on the right, then water beside its add buttons, one box holding distance, move minutes, BMI and wellbeing, and a box-breathing timer |
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 📈 Trends | One metric at a time over Day, Week or Month. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Tapping a bar in Week or Month opens that day hour by hour |
 | 🩺 Health | BMI with its band, the wellbeing score with its rating, and the arithmetic that produced it line by line |
@@ -149,7 +149,8 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 
 The Today heart carries three bands: steps yellow, calories red, heart points green. Each
 band is the same outline shrunk by one stroke plus a gap, and progress runs from the bottom
-point up the right side.
+point up the right side. It takes half the card, with the figures in the other half, so the
+shape is read alongside the numbers rather than above them.
 Water, distance and move minutes are neutral cards there, and take their own hue only
 where they are the single colored thing on screen: the water glass on its own tab, and
 the weekly chart, which draws one metric at a time.

@@ -1,5 +1,6 @@
 package app.bodyfit.ui.components
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -17,11 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -32,7 +31,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -42,7 +40,7 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 
-/** One ring of the gauge: how far round it has gone, and what to call it underneath. */
+/** One band of the gauge: how far round it has gone, and what to call it beside it. */
 data class GaugeArc(
     val emoji: String,
     @DrawableRes val iconRes: Int? = null,
@@ -55,28 +53,28 @@ data class GaugeArc(
 )
 
 /**
- * A heart drawn as three thin nested bands, one per metric, outermost first.
+ * The day's figures on the left, a heart of three thin nested bands on the right.
  *
- * The shape is the classic parametric heart, `x = 16 sin^3 t` and
- * `y = 13 cos t - 5 cos 2t - 2 cos 3t - cos 4t`, sampled into a path and scaled to the
- * box. Each band is the same outline shrunk by one stroke plus a gap, so the three stay
- * evenly spaced whatever the size.
+ * The heart is the classic parametric outline, `x = 16 sin^3 t` and
+ * `y = 13 cos t - 5 cos 2t - 2 cos 3t - cos 4t`, sampled into a path and scaled to its
+ * half of the row. Each band is that outline shrunk by one stroke plus a gap, so the three
+ * stay evenly spaced whatever the size.
  *
- * Progress runs from the bottom point and up the right side, which is where the eye
- * starts on a heart. A band stops at a full lap when its goal is beaten; the surplus is
- * reported in the legend rather than by a second lap, so a band always means "how much of
- * the goal" and never an ambiguous overlap.
+ * Progress runs from the bottom point and up the right side, which is where the eye starts
+ * on a heart. A band stops at a full lap when its goal is beaten; the surplus is reported
+ * by the figures rather than by a second lap, so a band always means "how much of the
+ * goal" and never an ambiguous overlap.
  *
  * Three bands is the cap. The hues are the only set that stays distinguishable for
- * colorblind readers in both themes, and the legend under the gauge names each one, so
+ * colorblind readers in both themes, and every band is named in the list beside it, so
  * identity never rests on color alone.
  */
 @Composable
 fun HeartGauge(
     arcs: List<GaugeArc>,
     modifier: Modifier = Modifier,
-    strokeWidth: Dp = 7.dp,
-    arcGap: Dp = 9.dp,
+    strokeWidth: Dp = 5.dp,
+    arcGap: Dp = 6.dp,
     center: @Composable ColumnScope.() -> Unit,
 ) {
     val trackColor = LocalViz.current.track
@@ -88,19 +86,30 @@ fun HeartGauge(
         )
     }
 
-    Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            center()
+            Spacer(Modifier.height(14.dp))
+            GaugeLegend(arcs = arcs)
+        }
+
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 320.dp)
+                .weight(1f)
                 .aspectRatio(HEART_ASPECT),
-            contentAlignment = Alignment.Center,
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val stroke = strokeWidth.toPx()
                 val gap = arcGap.toPx()
-                // Fit whichever axis is tighter, so the shape keeps its proportions
-                // rather than being stretched to the box.
+                // Fit whichever axis is tighter, so the shape keeps its proportions rather
+                // than being stretched to the box.
                 val outerScale = minOf(
                     (size.width - stroke) / HEART_WIDTH,
                     (size.height - stroke) / HEART_HEIGHT,
@@ -133,18 +142,50 @@ fun HeartGauge(
                     )
                 }
             }
-
-            Column(
-                // Nudged up: a heart is widest across its lobes and narrows to the point,
-                // so text centred on the box would sit where there is least room for it.
-                modifier = Modifier.padding(bottom = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                content = center,
-            )
         }
+    }
+}
 
-        Spacer(Modifier.height(16.dp))
-        GaugeLegend(arcs = arcs)
+/**
+ * One row per band: its colour dot and emoji, then the value over its goal.
+ *
+ * Stacked rather than spread across the width, because the list now has half the row to
+ * live in and "Heart points" does not fit beside two siblings in that space.
+ */
+@Composable
+private fun GaugeLegend(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        arcs.forEach { arc ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(arc.color, CircleShape)
+                )
+                Spacer(Modifier.width(6.dp))
+                Glyph(emoji = arc.emoji, iconRes = arc.iconRes, size = 13.dp)
+                Spacer(Modifier.width(6.dp))
+                Column {
+                    Text(
+                        text = arc.value,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "of ${arc.goalLabel}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -186,61 +227,4 @@ private fun heartPath(middle: Offset, scale: Float): Path {
     }
     path.close()
     return path
-}
-
-/**
- * Names every arc with its own color dot, emoji, value and goal.
- *
- * Values wear text ink; only the dot carries the hue, so the numbers stay readable
- * against either surface.
- */
-@Composable
-private fun GaugeLegend(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
-    // Equal-width columns, so a long label like "Heart points" cannot squeeze its
-    // neighbours or run into the card edge.
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        arcs.forEach { arc ->
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(arc.color, CircleShape)
-                    )
-                    Spacer(Modifier.width(3.dp))
-                    Glyph(emoji = arc.emoji, iconRes = arc.iconRes, size = 13.dp)
-                }
-                Text(
-                    text = arc.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = arc.value,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                )
-                Text(
-                    text = "Goal: ${arc.goalLabel}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                )
-            }
-        }
-    }
 }

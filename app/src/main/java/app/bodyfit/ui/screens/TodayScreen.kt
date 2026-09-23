@@ -86,7 +86,7 @@ fun TodayScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 24.dp),
+                        .padding(vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     HeartGauge(
@@ -109,15 +109,13 @@ fun TodayScreen(
                             size = 22.dp,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // The step total leads, and its goal is left to the list below:
+                        // half a card is not wide enough to print the same figure twice.
                         Text(
                             text = Metric.STEPS.format(record.steps.toDouble()),
-                            style = MaterialTheme.typography.displayLarge,
+                            style = MaterialTheme.typography.displaySmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = "of ${Metric.STEPS.format(settings.stepGoal.toDouble())} steps",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
                         )
                     }
                     Spacer(Modifier.height(16.dp))
