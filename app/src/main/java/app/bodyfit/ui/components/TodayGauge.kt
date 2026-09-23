@@ -36,7 +36,12 @@ data class GaugeArc(
     val vector: ImageVector? = null,
     val label: String,
     val value: String,
-    /** Printed under the value, in place of a percentage. */
+    /**
+     * Printed under the value, in place of a percentage.
+     *
+     * It carries the unit, which is why [value] does not: at this size "3,768 steps" costs
+     * the width three rings need, and printing the unit twice buys nothing.
+     */
     val goalLabel: String,
     val progress: Float,
     /** The ring's hue. Validated as a mark, not as text. */
@@ -63,8 +68,8 @@ data class GaugeArc(
 fun TodayGauge(
     arcs: List<GaugeArc>,
     modifier: Modifier = Modifier,
-    ringWidth: Dp = 14.dp,
-    ringGap: Dp = 5.dp,
+    ringWidth: Dp = 8.dp,
+    ringGap: Dp = 7.dp,
 ) {
     val trackColor = LocalViz.current.track
     val animated = arcs.map { arc ->
@@ -83,7 +88,7 @@ fun TodayGauge(
         Column(
             // The figures are the point and they set the type size, so they take the
             // larger share. The rings stay readable well below half the row.
-            modifier = Modifier.weight(1.25f),
+            modifier = Modifier.weight(1.5f),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             arcs.forEach { arc ->
@@ -92,14 +97,14 @@ fun TodayGauge(
                         emoji = arc.emoji,
                         iconRes = arc.iconRes,
                         vector = arc.vector,
-                        size = 24.dp,
+                        size = 26.dp,
                         tint = arc.color,
                     )
                     Spacer(Modifier.width(8.dp))
                     Column {
                         Text(
                             text = arc.value,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.headlineMedium,
                             // The figure wears its ring's colour, so the eye can pair the
                             // two without counting inwards from the outside. A text-safe
                             // shade of it: the mark colours are too faint to read as a
@@ -122,7 +127,7 @@ fun TodayGauge(
 
         Canvas(
             modifier = Modifier
-                .weight(0.95f)
+                .weight(1f)
                 .aspectRatio(1f),
         ) {
             val stroke = ringWidth.toPx()
@@ -132,7 +137,9 @@ fun TodayGauge(
                 // one ring plus a gap per step inwards.
                 val inset = stroke / 2f + index * (stroke + gap)
                 val diameter = minOf(size.width, size.height) - inset * 2
-                if (diameter <= 0f) return@forEachIndexed
+                // Not merely positive: a ring narrower than its own stroke draws as a blob
+                // at the centre, which reads as a mark rather than as a third metric.
+                if (diameter <= stroke * 2) return@forEachIndexed
 
                 val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
                 val ring = Size(diameter, diameter)

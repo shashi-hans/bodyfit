@@ -206,7 +206,9 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 The Today card carries the day's figures on the left and three nested rings on the right:
 steps green, calories yellow, heart points red. Each figure sits beside its own mark,
 footprints, the fire emoji and a heart, and is printed in its ring's colour so the two pair
-without counting inwards from the outside.
+without counting inwards from the outside. The figure is bare and the line under it carries
+the unit: at this size "3,768 steps" costs the width the three rings need, and printing the
+unit twice buys nothing.
 
 A circle's perimeter is uniform, so a given share of the goal is always the same length of
 arc. The shapes tried before this could not manage that. A heart traced by a band has an

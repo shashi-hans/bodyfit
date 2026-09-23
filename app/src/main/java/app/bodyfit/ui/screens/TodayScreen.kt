@@ -101,7 +101,8 @@ fun TodayScreen(
                                 iconRes = metric.iconRes,
                                 vector = metric.vector,
                                 label = metric.label,
-                                value = metric.formatWithUnit(metric.value(record, settings)),
+                                // Bare: the goal line under it carries the unit.
+                                value = metric.format(metric.value(record, settings)),
                                 goalLabel = metric.formatWithUnit(metric.dailyGoal(settings)),
                                 progress = progressOf(metric, record, settings),
                                 color = metric.color(viz),
