@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!--
+      Drawn here rather than taken from an icon set because the Today screen strokes its
+      emblems as outlines, which needs the path data, not a rendered vector. One closed
+      contour: a body that tapers to a point, with a notch on the left for the inner curl.
+    -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12 2.2C14.2 5.6 16.8 8.6 16.8 13C16.8 17.6 14.6 21.3 12 21.3C9.4 21.3 7.2 17.6 7.2 13C7.2 10.4 8.4 8.4 9.8 6.6C9.8 8.8 10.4 10.4 11.4 11.4C11.9 9 11.6 5.4 12 2.2Z" />
+</vector>

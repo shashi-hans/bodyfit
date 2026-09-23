@@ -100,7 +100,7 @@ fun TodayScreen(
                                 emoji = metric.emoji,
                                 iconRes = metric.iconRes,
                                 vector = metric.vector,
-                                shape = metric.fillShape,
+                                emblem = metric.emblem,
                                 label = metric.label,
                                 value = metric.formatWithUnit(metric.value(record, settings)),
                                 goalLabel = metric.formatWithUnit(metric.dailyGoal(settings)),

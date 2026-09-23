@@ -23,10 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -43,11 +40,8 @@ data class GaugeArc(
     @DrawableRes val iconRes: Int? = null,
     /** Drawn in [color] where present, which an emoji cannot be. */
     val vector: ImageVector? = null,
-    /**
-     * The emblem that fills to show progress. Null falls back to the heart, which is drawn
-     * from a path rather than an asset so it can carry an outline.
-     */
-    val shape: ImageVector? = null,
+    /** The shape that fills to show progress. */
+    val emblem: Emblem = Emblem.HEART_POINTS,
     val label: String,
     val value: String,
     /** Printed under the value, in place of a percentage. */
@@ -127,12 +121,11 @@ fun HeartGauge(
 }
 
 /**
- * One metric's emblem, filling from the bottom.
+ * One metric's emblem, outlined in its colour and filling from the bottom.
  *
- * The heart is drawn from its own path so it can be stroked as an outline. The others are
- * vector assets, which are filled by painting the same icon twice, once dim and once in
- * the metric's colour clipped to the level. That way any icon can become a gauge without
- * first being rewritten as a path.
+ * Every emblem is a path, so all three are treated alike: filled to the level, then
+ * stroked. Drawing them as vector assets would have been less code but could not carry an
+ * outline, and an empty shape would then be a grey blank saying nothing about its metric.
  */
 @Composable
 private fun FillingShape(
@@ -142,46 +135,43 @@ private fun FillingShape(
     outlineWidth: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val painter = arc.shape?.let { rememberVectorPainter(it) }
-
     Canvas(
-        modifier = modifier.aspectRatio(if (painter == null) HEART_ASPECT else 1f),
+        modifier = modifier.aspectRatio(
+            if (arc.emblem == Emblem.HEART_POINTS) HEART_ASPECT else 1f,
+        ),
     ) {
-        if (painter == null) {
-            val outline = outlineWidth.toPx()
+        val outline = outlineWidth.toPx()
+        val path = if (arc.emblem == Emblem.HEART_POINTS) {
             // The stroke straddles the path, so the shape is inset by half of it.
             val scale = minOf(
                 (size.width - outline) / HEART_WIDTH,
                 (size.height - outline) / HEART_HEIGHT,
             )
-            val path = heartPath(Offset(size.width / 2f, size.height / 2f), scale)
-            drawPath(path, trackColor)
-            clipPath(path) {
-                val filled = size.height * progress
-                drawRect(
-                    color = arc.color,
-                    topLeft = Offset(0f, size.height - filled),
-                    size = Size(size.width, filled),
-                )
-            }
-            drawPath(
-                path = path,
-                color = arc.color,
-                style = Stroke(width = outline, join = StrokeJoin.Round),
-            )
-            return@Canvas
+            heartPath(Offset(size.width / 2f, size.height / 2f), scale)
+        } else {
+            emblemPath(arc.emblem, size, outline) ?: return@Canvas
         }
 
-        with(painter) {
-            draw(size, colorFilter = ColorFilter.tint(trackColor))
+        drawPath(path, trackColor)
+        // Clipping to the outline and filling a rectangle upward from the bottom is what
+        // makes the level follow the shape: the water line stays flat while the vessel
+        // around it narrows.
+        clipPath(path) {
+            val filled = size.height * progress
+            drawRect(
+                color = arc.color,
+                topLeft = Offset(0f, size.height - filled),
+                size = Size(size.width, filled),
+            )
         }
-        // Clipping the canvas rather than the icon is what makes the level cut straight
-        // across whatever the shape is, the way a liquid would sit in it.
-        clipRect(top = size.height * (1f - progress)) {
-            with(painter) {
-                draw(size, colorFilter = ColorFilter.tint(arc.color))
-            }
-        }
+        // Drawn last so it sits over the fill, and rounded at the joins: a heart's flanks
+        // meet at the point at an angle sharp enough for a mitre to shoot a spike past the
+        // shape, and the footprints have corners of their own.
+        drawPath(
+            path = path,
+            color = arc.color,
+            style = Stroke(width = outline, join = StrokeJoin.Round),
+        )
     }
 }
 

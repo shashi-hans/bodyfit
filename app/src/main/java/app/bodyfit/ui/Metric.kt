@@ -2,7 +2,6 @@ package app.bodyfit.ui
 
 import androidx.annotation.DrawableRes
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Place
@@ -16,6 +15,7 @@ import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.UserSettings
 import app.bodyfit.data.Volume
 import app.bodyfit.sensor.Metrics
+import app.bodyfit.ui.components.Emblem
 import app.bodyfit.ui.theme.VizColors
 import java.util.Locale
 
@@ -122,18 +122,16 @@ enum class Metric(
         }
 
     /**
-     * The emblem that fills on the Today screen to show progress.
+     * The shape that fills on the Today screen to show progress.
      *
-     * Null means the heart, which is drawn from a path rather than an asset so it can be
-     * stroked as an outline. Heart points keep it, where it now says what it measures
-     * rather than standing in for every metric at once.
+     * Heart points keep the heart, where it says what it measures rather than standing in
+     * for every metric at once. Steps get footprints and calories a flame.
      */
-    val fillShape: ImageVector?
+    val emblem: Emblem
         get() = when (this) {
-            STEPS -> Icons.Filled.DirectionsWalk
-            CALORIES -> Icons.Filled.LocalFireDepartment
-            HEART_POINTS -> null
-            else -> vector
+            CALORIES -> Emblem.CALORIES
+            HEART_POINTS -> Emblem.HEART_POINTS
+            else -> Emblem.STEPS
         }
 
     fun color(viz: VizColors): Color = when (this) {
