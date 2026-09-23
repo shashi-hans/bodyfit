@@ -21,9 +21,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.bodyfit.ui.theme.LocalViz
 import kotlin.math.PI
@@ -57,7 +60,11 @@ data class GaugeArc(
  * themes, and every heart is named underneath, so identity never rests on colour alone.
  */
 @Composable
-fun HeartGauge(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
+fun HeartGauge(
+    arcs: List<GaugeArc>,
+    modifier: Modifier = Modifier,
+    outlineWidth: Dp = 3.dp,
+) {
     val trackColor = LocalViz.current.track
     val animated = arcs.map { arc ->
         animateFloatAsState(
@@ -81,7 +88,13 @@ fun HeartGauge(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
                         .fillMaxWidth()
                         .aspectRatio(HEART_ASPECT),
                 ) {
-                    val scale = minOf(size.width / HEART_WIDTH, size.height / HEART_HEIGHT)
+                    val outline = outlineWidth.toPx()
+                    // The stroke straddles the path, so the shape is inset by half of it.
+                    // Scaled to the full box the outline would be clipped by the canvas.
+                    val scale = minOf(
+                        (size.width - outline) / HEART_WIDTH,
+                        (size.height - outline) / HEART_HEIGHT,
+                    )
                     val path = heartPath(Offset(size.width / 2f, size.height / 2f), scale)
                     drawPath(path, trackColor)
                     // Clipping to the outline and filling a rectangle upward from the
@@ -95,6 +108,14 @@ fun HeartGauge(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
                             size = Size(size.width, filled),
                         )
                     }
+                    // Drawn last so it sits over the fill, and rounded at the joins: the
+                    // two flanks meet at the point at a sharp angle, where a mitre would
+                    // shoot a spike well past the shape.
+                    drawPath(
+                        path = path,
+                        color = arc.color,
+                        style = Stroke(width = outline, join = StrokeJoin.Round),
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(

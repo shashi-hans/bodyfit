@@ -148,7 +148,9 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 ## Chart colors
 
 The Today card carries three hearts: steps green, calories yellow, heart points red. Each
-fills from the bottom in proportion to its goal, with its value and name underneath.
+is outlined in its own colour and fills from the bottom in proportion to its goal, with its
+value and name underneath. The outline means an empty heart still reads as its metric
+rather than as a grey blank.
 
 Three nested bands round one outline came first and were dropped: a share of the goal is
 read as a position along a curve, which is far harder than a fill level, and the bands
