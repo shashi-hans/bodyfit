@@ -94,6 +94,7 @@ fun TodayScreen(
                             GaugeArc(
                                 emoji = metric.emoji,
                                 iconRes = metric.iconRes,
+                                vector = metric.vector,
                                 label = metric.label,
                                 value = metric.formatWithUnit(metric.value(record, settings)),
                                 goalLabel = metric.formatWithUnit(metric.dailyGoal(settings)),
@@ -102,22 +103,7 @@ fun TodayScreen(
                             )
                         },
                         modifier = Modifier.padding(horizontal = 16.dp),
-                    ) {
-                        Glyph(
-                            emoji = Metric.STEPS.emoji,
-                            iconRes = Metric.STEPS.iconRes,
-                            size = 22.dp,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        // The step total leads, and its goal is left to the list below:
-                        // half a card is not wide enough to print the same figure twice.
-                        Text(
-                            text = Metric.STEPS.format(record.steps.toDouble()),
-                            style = MaterialTheme.typography.displaySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                        )
-                    }
+                    )
                     Spacer(Modifier.height(16.dp))
                     // The legend already prints each share of goal, so this line adds the
                     // celebration and the week, not a second copy of the percentage.

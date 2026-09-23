@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -44,6 +45,8 @@ import kotlin.math.sin
 data class GaugeArc(
     val emoji: String,
     @DrawableRes val iconRes: Int? = null,
+    /** Drawn in [color] where present, which an emoji cannot be. */
+    val vector: ImageVector? = null,
     val label: String,
     val value: String,
     /** Printed under the value, in place of a percentage. */
@@ -75,7 +78,6 @@ fun HeartGauge(
     modifier: Modifier = Modifier,
     strokeWidth: Dp = 5.dp,
     arcGap: Dp = 6.dp,
-    center: @Composable ColumnScope.() -> Unit,
 ) {
     val trackColor = LocalViz.current.track
     val animated = arcs.map { arc ->
@@ -91,14 +93,7 @@ fun HeartGauge(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.Start,
-        ) {
-            center()
-            Spacer(Modifier.height(14.dp))
-            GaugeLegend(arcs = arcs)
-        }
+        GaugeLegend(arcs = arcs, modifier = Modifier.weight(1f))
 
         Box(
             modifier = Modifier
@@ -147,38 +142,40 @@ fun HeartGauge(
 }
 
 /**
- * One row per band: its colour dot and emoji, then the value over its goal.
+ * One row per band: its icon in the band's own colour, then the value over its goal.
  *
- * Stacked rather than spread across the width, because the list now has half the row to
- * live in and "Heart points" does not fit beside two siblings in that space.
+ * The icon carries the hue, so the separate colour dot that used to sit beside it is gone:
+ * two marks for one identity is one too many. Stacked rather than spread across the width,
+ * because the list has half the row to live in and "Heart points" does not fit beside two
+ * siblings in that space.
  */
 @Composable
 private fun GaugeLegend(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         arcs.forEach { arc ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(arc.color, CircleShape)
+                Glyph(
+                    emoji = arc.emoji,
+                    iconRes = arc.iconRes,
+                    vector = arc.vector,
+                    size = 22.dp,
+                    tint = arc.color,
                 )
-                Spacer(Modifier.width(6.dp))
-                Glyph(emoji = arc.emoji, iconRes = arc.iconRes, size = 13.dp)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(10.dp))
                 Column {
                     Text(
                         text = arc.value,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = "of ${arc.goalLabel}",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

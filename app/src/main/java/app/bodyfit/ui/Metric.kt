@@ -1,7 +1,14 @@
 package app.bodyfit.ui
 
 import androidx.annotation.DrawableRes
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import app.bodyfit.R
 import app.bodyfit.data.DailyRecord
 import app.bodyfit.data.HourlyRecord
@@ -96,6 +103,22 @@ enum class Metric(
      * beside "800" would be unreadable without it.
      */
     fun formatForChart(value: Double): String = if (this == WATER) formatWithUnit(value) else format(value)
+
+    /**
+     * A tintable mark, for the places that paint the icon in the metric's own colour.
+     *
+     * Steps keeps its drawable: the same asset serves the notification's status-bar icon,
+     * where a Compose vector is not an option.
+     */
+    val vector: ImageVector?
+        get() = when (this) {
+            STEPS -> null
+            CALORIES -> Icons.Filled.LocalFireDepartment
+            DISTANCE -> Icons.Filled.Place
+            MOVE_MINUTES -> Icons.Filled.Timer
+            HEART_POINTS -> Icons.Filled.MonitorHeart
+            WATER -> Icons.Filled.WaterDrop
+        }
 
     fun color(viz: VizColors): Color = when (this) {
         STEPS -> viz.steps
