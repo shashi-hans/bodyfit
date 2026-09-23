@@ -45,7 +45,7 @@ import app.bodyfit.ui.components.BreathingCard
 import app.bodyfit.ui.components.BreathingDialog
 import app.bodyfit.ui.components.GaugeArc
 import app.bodyfit.ui.components.Glyph
-import app.bodyfit.ui.components.HalfCircleGauge
+import app.bodyfit.ui.components.HeartGauge
 import app.bodyfit.ui.components.StatCard
 import app.bodyfit.ui.theme.LocalViz
 import java.time.LocalDate
@@ -89,7 +89,7 @@ fun TodayScreen(
                         .padding(vertical = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    HalfCircleGauge(
+                    HeartGauge(
                         arcs = Metric.GAUGE_ARCS.map { metric ->
                             GaugeArc(
                                 emoji = metric.emoji,
