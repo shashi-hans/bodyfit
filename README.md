@@ -11,7 +11,7 @@ network client and no analytics in the app.
 
 | Tab | What it holds |
 | --- | --- |
-| 🏠 Today | App name and greeting across the top, then one heart per metric (steps, calories, heart points), each filling from the bottom as its goal is approached, with the value and name under each, then water beside its add buttons, one box holding distance, move minutes, BMI and wellbeing, and a box-breathing timer |
+| 🏠 Today | App name and greeting across the top, then one heart per metric (steps, calories, heart points), each filling from the bottom as its goal is approached, with the value and name under each, then water beside its add buttons, one box holding distance, move minutes, BMI and wellbeing, and an exercise list |
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 📈 Trends | One metric at a time over Day, Week or Month. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Tapping a bar in Week or Month opens that day hour by hour |
 | 🩺 Health | BMI with its band, the wellbeing score with its rating, and the arithmetic that produced it line by line |
@@ -149,8 +149,8 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 
 The Today card carries three hearts: steps green, calories yellow, heart points red. Each
 is outlined in its own colour and fills from the bottom in proportion to its goal, with its
-value and name underneath. The outline means an empty heart still reads as its metric
-rather than as a grey blank.
+value, name and goal underneath. The outline means an empty heart still reads as its metric
+rather than as a grey blank, and the goal gives the fill level a scale to be read against.
 
 Three nested bands round one outline came first and were dropped: a share of the goal is
 read as a position along a curve, which is far harder than a fill level, and the bands

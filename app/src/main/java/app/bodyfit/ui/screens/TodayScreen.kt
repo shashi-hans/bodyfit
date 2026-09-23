@@ -41,10 +41,12 @@ import app.bodyfit.data.Volume
 import app.bodyfit.insights.Insights
 import app.bodyfit.ui.Metric
 import app.bodyfit.ui.components.AppLogo
-import app.bodyfit.ui.components.BreathingCard
 import app.bodyfit.ui.components.BreathingDialog
+import app.bodyfit.ui.components.Exercise
+import app.bodyfit.ui.components.ExerciseCard
 import app.bodyfit.ui.components.GaugeArc
 import app.bodyfit.ui.components.Glyph
+import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.HeartGauge
 import app.bodyfit.ui.components.StatCard
 import app.bodyfit.ui.theme.LocalViz
@@ -243,7 +245,20 @@ fun TodayScreen(
             }
         }
 
-        item { BreathingCard(onStart = { breathing = true }) }
+        item { SectionHeader(emoji = "🏋️", title = "Exercise") }
+
+        item {
+            ExerciseCard(
+                exercises = listOf(
+                    Exercise(
+                        emoji = "🧘",
+                        name = "Box breathing",
+                        description = "Four seconds in, hold, out, hold. Nothing is recorded.",
+                        onStart = { breathing = true },
+                    ),
+                ),
+            )
+        }
 
         item { Spacer(Modifier.height(4.dp)) }
     }

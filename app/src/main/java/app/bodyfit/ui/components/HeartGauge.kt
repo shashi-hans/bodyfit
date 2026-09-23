@@ -57,7 +57,8 @@ data class GaugeArc(
  * lets each carry its colour outright rather than as a thin line.
  *
  * The hues are the only set that stays distinguishable for colorblind readers in both
- * themes, and every heart is named underneath, so identity never rests on colour alone.
+ * themes, and every heart is named underneath with its goal, so identity never rests on
+ * colour alone and the fill level always has a scale to be read against.
  */
 @Composable
 fun HeartGauge(
@@ -127,6 +128,13 @@ fun HeartGauge(
                 )
                 Text(
                     text = arc.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "of ${arc.goalLabel}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
