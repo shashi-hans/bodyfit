@@ -14,3 +14,7 @@ captures/
 # Python bytecode from scripts/
 __pycache__/
 *.pyc
+
+# Release signing. Never commit: losing or leaking this ends the ability to update the app.
+keystore.properties
+*.jks

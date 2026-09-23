@@ -1,8 +1,33 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
 }
+
+// Release signing details live outside the repo. keystore.properties is gitignored, and
+// the environment variables let CI sign without a file on disk. When neither is present
+// the release build is simply unsigned, which is what a fresh clone should do rather than
+// failing.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun signingValue(key: String, env: String): String? =
+    keystoreProperties.getProperty(key) ?: System.getenv(env)
+
+val releaseStorePath = signingValue("storeFile", "BODYFIT_STORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "BODYFIT_STORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "BODYFIT_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "BODYFIT_KEY_PASSWORD")
+val canSignRelease = listOf(
+    releaseStorePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() } && file(releaseStorePath!!).exists()
 
 android {
     namespace = "app.bodyfit"
@@ -17,6 +42,17 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    signingConfigs {
+        if (canSignRelease) {
+            create("release") {
+                storeFile = file(releaseStorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -27,6 +63,7 @@ android {
         }
         release {
             resValue("string", "app_name", "Body Fit")
+            if (canSignRelease) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
