@@ -26,6 +26,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.bodyfit.ui.theme.LocalViz
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
 
 /** One heart of the gauge: how full it is, and what to call it underneath. */
 data class GaugeArc(
@@ -46,8 +50,8 @@ data class GaugeArc(
  *
  * A fill level is read at a glance; a position along a curve is not. Three nested outlines
  * shared one path, so 70% and 90% ended up looking alike and all three crowded together
- * where the shape narrows. One shape per metric removes both problems and lets each carry
- * its colour outright rather than as a thin line.
+ * where the shape narrows to its point. One shape per metric removes both problems and
+ * lets each carry its colour outright rather than as a thin line.
  *
  * The hues are the only set that stays distinguishable for colorblind readers in both
  * themes, and every heart is named underneath, so identity never rests on colour alone.
@@ -75,9 +79,10 @@ fun HeartGauge(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(1f),
+                        .aspectRatio(HEART_ASPECT),
                 ) {
-                    val path = heartPath(size)
+                    val scale = minOf(size.width / HEART_WIDTH, size.height / HEART_HEIGHT)
+                    val path = heartPath(Offset(size.width / 2f, size.height / 2f), scale)
                     drawPath(path, trackColor)
                     // Clipping to the outline and filling a rectangle upward from the
                     // bottom is what makes the level follow the shape: the water line
@@ -111,37 +116,42 @@ fun HeartGauge(arcs: List<GaugeArc>, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * A heart with a rounded base rather than a point, filling [box].
- *
- * Built from cubics rather than the usual `x = 16 sin^3 t` parametric, which meets itself
- * at the bottom in a corner and cannot be rounded without cutting the shape about. Here
- * the two flanks stop short of the centre and a separate curve sweeps between them, so the
- * base is a smooth arc.
- *
- * Coordinates are a unit box, x and y in -1 to 1 with y upward, mapped onto [box] at the
- * end. That keeps the control points readable as proportions of the shape.
- */
-private fun heartPath(box: Size): Path {
-    fun px(x: Float) = (x + 1f) / 2f * box.width
-    fun py(y: Float) = (1f - y) / 2f * box.height
+/** Samples enough to hide the straight segments at this size. */
+private const val HEART_SAMPLES = 240
 
-    return Path().apply {
-        // Bottom right, where the rounded base begins.
-        moveTo(px(0.30f), py(-0.70f))
-        // The base itself, sweeping left. Both control points sit below the ends, which is
-        // what turns the meeting of the two flanks into an arc instead of a V.
-        cubicTo(px(0.14f), py(-0.94f), px(-0.14f), py(-0.94f), px(-0.30f), py(-0.70f))
-        // Up the left flank.
-        cubicTo(px(-0.78f), py(-0.26f), px(-1.00f), py(0.08f), px(-1.00f), py(0.44f))
-        // Over the left lobe and down into the dip between them.
-        cubicTo(px(-1.00f), py(0.86f), px(-0.62f), py(1.00f), px(-0.32f), py(1.00f))
-        cubicTo(px(-0.10f), py(1.00f), px(0.00f), py(0.82f), px(0.00f), py(0.50f))
-        // Out of the dip and over the right lobe.
-        cubicTo(px(0.00f), py(0.82f), px(0.10f), py(1.00f), px(0.32f), py(1.00f))
-        cubicTo(px(0.62f), py(1.00f), px(1.00f), py(0.86f), px(1.00f), py(0.44f))
-        // Down the right flank to where the base began.
-        cubicTo(px(1.00f), py(0.08f), px(0.78f), py(-0.26f), px(0.30f), py(-0.70f))
-        close()
+/**
+ * The outline sampled once in its own units, starting at the bottom point and running up
+ * the right side.
+ *
+ * Sampled rather than described by constants because the curve's extent is not obvious:
+ * the lobes peak near y = 11.9, not at the y = 5 the formula reaches at t = 0, and a
+ * height guessed from that endpoint clips them.
+ */
+private val HEART_POINTS: List<Offset> = List(HEART_SAMPLES + 1) { i ->
+    val t = PI - (i.toDouble() / HEART_SAMPLES) * 2 * PI
+    Offset(
+        (16.0 * sin(t).pow(3)).toFloat(),
+        (13.0 * cos(t) - 5.0 * cos(2 * t) - 2.0 * cos(3 * t) - cos(4 * t)).toFloat(),
+    )
+}
+
+private val HEART_WIDTH = HEART_POINTS.maxOf { it.x } - HEART_POINTS.minOf { it.x }
+private val HEART_HEIGHT = HEART_POINTS.maxOf { it.y } - HEART_POINTS.minOf { it.y }
+private val HEART_MID_X = (HEART_POINTS.maxOf { it.x } + HEART_POINTS.minOf { it.x }) / 2f
+private val HEART_MID_Y = (HEART_POINTS.maxOf { it.y } + HEART_POINTS.minOf { it.y }) / 2f
+
+/** About 1.11: a shade wider than tall. */
+private val HEART_ASPECT = HEART_WIDTH / HEART_HEIGHT
+
+/** The outline centred on [middle] at [scale] pixels per unit. */
+private fun heartPath(middle: Offset, scale: Float): Path {
+    val path = Path()
+    HEART_POINTS.forEachIndexed { i, point ->
+        val px = middle.x + (point.x - HEART_MID_X) * scale
+        // Screen y grows downward, so the shape is flipped as it is placed.
+        val py = middle.y - (point.y - HEART_MID_Y) * scale
+        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
     }
+    path.close()
+    return path
 }

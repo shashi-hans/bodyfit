@@ -152,9 +152,10 @@ fills from the bottom in proportion to its goal, with its value and name underne
 
 Three nested bands round one outline came first and were dropped: a share of the goal is
 read as a position along a curve, which is far harder than a fill level, and the bands
-crowded together where the shape narrows. The base is rounded rather than pointed, which
-the usual `x = 16 sin^3 t` parametric cannot do, so the outline is built from cubics with
-the flanks stopping short of centre and a separate curve sweeping between them.
+crowded together where the shape narrows to its point. The outline is the usual
+`x = 16 sin^3 t` parametric, sampled into a path; its extent is computed from the samples
+rather than assumed, because the lobes peak near y = 11.9 and a height guessed from the
+formula's value at t = 0 clips them.
 Water, distance and move minutes are neutral cards there, and take their own hue only
 where they are the single colored thing on screen: the water glass on its own tab, and
 the weekly chart, which draws one metric at a time.
