@@ -222,12 +222,18 @@ fun BodyFitAppScreen(
                     NavigationBarItem(
                         selected = currentRoute == tab.route,
                         onClick = {
-                            if (currentRoute != tab.route) {
-                                navController.navigate(tab.route) {
-                                    popUpTo(Tab.TODAY.route) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                            if (currentRoute == tab.route) return@NavigationBarItem
+                            // A detail page sits on top of a tab. Popping it first is what
+                            // keeps it out of the saved back stack: saveState would
+                            // otherwise store it and restoreState put it straight back,
+                            // leaving the user on the page they were trying to leave.
+                            if (Tab.entries.none { it.route == currentRoute }) {
+                                navController.popBackStack()
+                            }
+                            navController.navigate(tab.route) {
+                                popUpTo(Tab.TODAY.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
                         },
                         icon = { Text(tab.emoji, style = MaterialTheme.typography.titleMedium) },
