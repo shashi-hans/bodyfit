@@ -16,8 +16,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -27,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -90,7 +96,22 @@ fun TrendsScreen(
     var selectedBar by rememberSaveable { mutableStateOf<Int?>(null) }
     var showTable by rememberSaveable { mutableStateOf(false) }
 
-    val anchor = remember(activeDate) { Dates.parse(activeDate) }
+    /** How many spans back from today the screen is looking. 0 is the current one. */
+    var offset by rememberSaveable { mutableIntStateOf(0) }
+
+    // Changing span with an offset held would land somewhere arbitrary: four weeks back is
+    // not four days back. Every change of span returns to the present.
+    LaunchedEffect(window) { offset = 0 }
+
+    val today = remember(activeDate) { Dates.parse(activeDate) }
+    val anchor = remember(today, window, offset) {
+        when (window) {
+            Window.DAY -> today.minusDays(offset.toLong())
+            Window.WEEK -> today.minusWeeks(offset.toLong())
+            Window.MONTH -> today.minusMonths(offset.toLong())
+        }
+    }
+    val viewDate = remember(anchor) { anchor.toString() }
     val days = remember(allDays, window, anchor) {
         if (window == Window.DAY) {
             emptyList()
@@ -105,20 +126,31 @@ fun TrendsScreen(
     // does. Either way the rows live in the view model, so the screen asks for the day it is
     // showing rather than holding a second copy of the query.
     val tappedDate = selectedBar?.let { days.getOrNull(it)?.date }
-    val hourlyDate = if (window == Window.DAY) activeDate else tappedDate
+    val hourlyDate = if (window == Window.DAY) viewDate else tappedDate
     LaunchedEffect(hourlyDate) { onSelectDay(hourlyDate) }
 
     val accent = metric.color(viz)
     val waterByHour = remember(hourlyWater) { WaterEntry.byHour(hourlyWater) }
 
     /** Whether the day itself holds anything, which is what an empty hourly chart has to explain. */
-    val dayHasTotals = remember(allDays, activeDate, settings, metric) {
-        allDays.firstOrNull { it.date == activeDate }?.let { metric.value(it, settings) > 0.0 } ?: false
+    val dayHasTotals = remember(allDays, viewDate, settings, metric) {
+        allDays.firstOrNull { it.date == viewDate }?.let { metric.value(it, settings) > 0.0 } ?: false
     }
 
-    val values = remember(window, days, hours, waterByHour, metric, settings, activeDate) {
+    // Stepping back is offered only where there is something to find. The forward arrow
+    // needs no such test: it can only ever return toward today.
+    val earliest = remember(allDays) { allDays.minOfOrNull { it.date } }
+    val spanStart = when (window) {
+        Window.DAY -> viewDate
+        Window.WEEK -> Dates.weekKeys(anchor).first()
+        Window.MONTH -> Dates.monthKeys(anchor).first()
+    }
+    val canGoBack = earliest != null && earliest < spanStart
+    val canGoForward = offset > 0
+
+    val values = remember(window, days, hours, waterByHour, metric, settings, viewDate) {
         if (window == Window.DAY) {
-            hourlyValues(activeDate, hours, waterByHour, metric, settings)
+            hourlyValues(viewDate, hours, waterByHour, metric, settings)
         } else {
             days.map { metric.value(it, settings) }
         }
@@ -131,7 +163,7 @@ fun TrendsScreen(
         }
     }
     val nowIndex = when (window) {
-        Window.DAY -> if (activeDate == Dates.today()) Dates.currentHour() else -1
+        Window.DAY -> if (viewDate == activeDate) Dates.currentHour() else -1
         else -> days.indexOfFirst { it.date == activeDate }
     }
     val labelEvery = when (window) {
@@ -162,14 +194,9 @@ fun TrendsScreen(
             SectionHeader(
                 emoji = "📈",
                 title = when (window) {
-                    Window.DAY -> "Today, hour by hour"
-                    Window.WEEK -> "This week"
-                    Window.MONTH -> "This month"
-                },
-                trailing = when (window) {
-                    Window.DAY -> Dates.dayLabel(activeDate)
-                    Window.WEEK -> dayRangeLabel(days)
-                    Window.MONTH -> Dates.monthLabel(anchor)
+                    Window.DAY -> if (offset == 0) "Today, hour by hour" else "Hour by hour"
+                    Window.WEEK -> if (offset == 0) "This week" else "A week"
+                    Window.MONTH -> if (offset == 0) "This month" else "A month"
                 },
             )
         }
@@ -184,6 +211,42 @@ fun TrendsScreen(
                             selectedBar = null
                         },
                         label = { Text(option.label) },
+                    )
+                }
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                IconButton(
+                    onClick = { offset += 1 },
+                    enabled = canGoBack,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = "Earlier",
+                    )
+                }
+                Text(
+                    text = when (window) {
+                        Window.DAY -> Dates.dayLabel(viewDate)
+                        Window.WEEK -> dayRangeLabel(days)
+                        Window.MONTH -> Dates.monthLabel(anchor)
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                IconButton(
+                    onClick = { offset -= 1 },
+                    enabled = canGoForward,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "Later",
                     )
                 }
             }
