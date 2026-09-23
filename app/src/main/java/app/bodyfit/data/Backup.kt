@@ -23,6 +23,9 @@ object Backup {
 
     fun suggestedFileName(today: String = Dates.today()): String = "bodyfit-backup-$today.json"
 
+    /** Undated, because the weekly backup rewrites one file rather than adding to a pile. */
+    fun autoBackupFileName(): String = "bodyfit-weekly-backup.json"
+
     fun toJson(
         days: List<DailyRecord>,
         hours: List<HourlyRecord>,

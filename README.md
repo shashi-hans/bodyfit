@@ -285,6 +285,23 @@ backup never erases newer tracking. Water entries and hourly rows for a restored
 replaced rather than appended, so restoring the same file twice cannot double a total. The
 tracker switch is not restored: whether this phone is counting is a property of the phone.
 
+### Weekly backup
+
+The backup page can also write on a schedule. The user picks a file once, the app takes
+persistable URI permission on it, and a WorkManager job rewrites that same file every week.
+The grant has to be persisted or the first scheduled run a day later fails with a security
+error nobody is present to see.
+
+One file is overwritten rather than a new one written each time, so a year does not leave
+52 copies on a drive. The stream is opened in `wt` mode: without truncation a shorter
+backup would leave the tail of the previous one behind and produce a file that is not valid
+JSON.
+
+The job waits for the battery not to be low, so a write can land a few hours late. It is
+re-asserted on every launch, because an app update or a force stop can drop the schedule
+and a weekly backup that quietly stopped is worse than one that never existed. A revoked
+or deleted file is recorded and shown on the page rather than retried forever.
+
 `format` is 2. A version 1 file still restores; it simply carries no hourly rows, and the
 Day trend draws those days as empty. A file written by a newer format is refused outright
 rather than half read.

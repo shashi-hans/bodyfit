@@ -3,6 +3,9 @@ package app.bodyfit.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import android.net.Uri
+import app.bodyfit.data.AutoBackupSettings
+import app.bodyfit.data.AutoBackupWorker
 import app.bodyfit.data.DailyRecord
 import app.bodyfit.data.Dates
 import app.bodyfit.data.ExerciseSession
@@ -143,6 +146,36 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     fun setSex(value: Sex) = viewModelScope.launch { repository.userSettings.setSex(value) }
     fun setWeight(value: Int) = viewModelScope.launch { repository.userSettings.setWeightKg(value) }
     fun setDefaultCup(value: Int) = viewModelScope.launch { repository.userSettings.setDefaultCup(value) }
+
+    private val autoBackup = AutoBackupSettings(application)
+
+    /** Where the weekly backup writes, or null when it is off. */
+    val autoBackupTarget: StateFlow<Uri?> = autoBackup.target
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val autoBackupLastRun: StateFlow<Long> = autoBackup.lastRun
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
+    val autoBackupError: StateFlow<String?> = autoBackup.lastError
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Remembers the chosen file, writes it once now, and schedules the weekly repeat. */
+    fun enableAutoBackup(uri: Uri) = viewModelScope.launch {
+        autoBackup.setTarget(uri)
+        val context = getApplication<Application>()
+        runCatching {
+            context.contentResolver.openOutputStream(uri, "wt")?.use {
+                it.write(repository.backupJson().toByteArray())
+            }
+        }.onSuccess { autoBackup.recordRun(System.currentTimeMillis(), error = null) }
+            .onFailure { autoBackup.recordRun(System.currentTimeMillis(), it.message) }
+        AutoBackupWorker.schedule(context)
+    }
+
+    fun disableAutoBackup() = viewModelScope.launch {
+        autoBackup.clearTarget()
+        AutoBackupWorker.cancel(getApplication())
+    }
 
     /** Serialises everything to JSON for the backup file. */
     suspend fun backupJson(): String = repository.backupJson()

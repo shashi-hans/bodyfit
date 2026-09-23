@@ -129,6 +129,9 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // The weekly backup has to run without the app open, and survive reboots.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
     testImplementation("junit:junit:4.13.2")

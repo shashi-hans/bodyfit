@@ -19,6 +19,10 @@ object Dates {
     /** Local hour of the day, 0 to 23, the key of an [HourlyRecord]. */
     fun currentHour(): Int = LocalTime.now().hour
 
+    /** The local date an epoch timestamp falls on, as an ISO key. */
+    fun of(epochMillis: Long): String =
+        Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+
     /** Local hour an epoch timestamp falls in, used to place a logged drink on the day. */
     fun hourOf(epochMillis: Long): Int =
         Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).hour

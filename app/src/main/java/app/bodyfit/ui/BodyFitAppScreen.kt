@@ -126,6 +126,9 @@ fun BodyFitAppScreen(
     val hourly by viewModel.hourly.collectAsState()
     val hourlyWater by viewModel.hourlyWater.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
+    val autoBackupTarget by viewModel.autoBackupTarget.collectAsState()
+    val autoBackupLastRun by viewModel.autoBackupLastRun.collectAsState()
+    val autoBackupError by viewModel.autoBackupError.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -200,6 +203,17 @@ fun BodyFitAppScreen(
             }
         },
     ) {
+    // CreateDocument rather than OpenDocument: the user is naming a file the app will keep
+    // rewriting, and picking an existing one to be overwritten reads as a mistake waiting
+    // to happen.
+    val autoBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(Backup.MIME_TYPE)
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        viewModel.enableAutoBackup(uri)
+        scope.launch { snackbar.showSnackbar("Weekly backup on") }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
@@ -345,6 +359,13 @@ fun BodyFitAppScreen(
                     BackupScreen(
                         onExport = { exportLauncher.launch(Backup.suggestedFileName()) },
                         onRestore = { restoreLauncher.launch(arrayOf("*/*")) },
+                        autoTarget = autoBackupTarget,
+                        autoLastRun = autoBackupLastRun,
+                        autoError = autoBackupError,
+                        onChooseAutoTarget = {
+                            autoBackupLauncher.launch(Backup.autoBackupFileName())
+                        },
+                        onDisableAuto = viewModel::disableAutoBackup,
                         onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,
                     )

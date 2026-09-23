@@ -32,6 +32,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.bodyfit.BuildConfig
 import app.bodyfit.R
+import android.net.Uri
+import app.bodyfit.data.Dates
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
 import app.bodyfit.ui.components.GoalSlider
@@ -340,6 +342,11 @@ fun HowNumbersWorkScreen(
 fun BackupScreen(
     onExport: () -> Unit,
     onRestore: () -> Unit,
+    autoTarget: Uri?,
+    autoLastRun: Long,
+    autoError: String?,
+    onChooseAutoTarget: () -> Unit,
+    onDisableAuto: () -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
@@ -362,6 +369,56 @@ fun BackupScreen(
                 Text(
                     text = "Restoring overwrites only the days the file carries. A day tracked " +
                         "since the backup is left alone.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        item {
+            SettingsCard {
+                Text(
+                    text = "🔁  Weekly backup",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                KeyValueRow("Status", if (autoTarget == null) "Off" else "On")
+                if (autoTarget != null) {
+                    KeyValueRow(
+                        "Last written",
+                        if (autoLastRun > 0) Dates.dayLabel(Dates.of(autoLastRun)) else "Not yet",
+                    )
+                }
+                Text(
+                    text = if (autoTarget == null) {
+                        "Choose a file once and the app rewrites it every week, so a phone lost " +
+                            "between manual exports does not cost you a year. The same file is " +
+                            "overwritten each time rather than a new one added."
+                    } else {
+                        "The chosen file is rewritten every week. Nothing is sent anywhere: it " +
+                            "is written straight to the location you picked."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (autoError != null && autoError.isNotBlank()) {
+                    Text(
+                        text = "Last attempt failed: $autoError",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onChooseAutoTarget) {
+                        Text(if (autoTarget == null) "Choose a file" else "Change file")
+                    }
+                    if (autoTarget != null) {
+                        OutlinedButton(onClick = onDisableAuto) { Text("Turn off") }
+                    }
+                }
+                Text(
+                    text = "The weekly write waits for the battery not to be low, so it can " +
+                        "land a few hours late.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
