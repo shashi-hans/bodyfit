@@ -15,7 +15,11 @@ network client and no analytics in the app.
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 📈 Trends | One metric at a time over Day, Week or Month. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Tapping a bar in Week or Month opens that day hour by hour |
 | 🩺 Health | BMI with its band, the wellbeing score with its rating, and the arithmetic that produced it line by line |
-| 🎯 Goals | Daily goals for steps, calories, water, heart points and move minutes, recommended goals, weekly targets, height, weight, age and smoking, backup export, default cup size, tracker switch, and how each number is calculated |
+| 🎯 Goals | Daily goals for steps, calories, water, heart points and move minutes, a Recommendation button opening the suggested set, and weekly targets |
+
+Everything that is not a goal sits behind the menu on the Today screen: About you, default
+cup size, lock screen card, how the numbers work, backup, and about. Each is a page with a
+back arrow, so no subject has two homes.
 
 ## Lock screen
 
@@ -37,9 +41,11 @@ Two details decide whether it actually appears, both learned on a HyperOS device
 Channel importance cannot be raised after a channel exists, so the id is
 `activity_visible` and the original `activity` channel is deleted on start.
 
-The tracker switch on the Goals tab starts and stops that service. Android requires a
-visible notification for a service that reads sensors in the background, so the switch
-covers both the counting and the card.
+The tracker switch on the lock screen card page starts and stops that service. Android
+requires a visible notification for a service that reads sensors in the background, so the
+switch covers both the counting and the card. The same page reports whether Android is
+restricting the app in the background, which is what silently stops counting, with a
+shortcut to the setting.
 
 ## How the numbers are calculated
 
@@ -47,12 +53,20 @@ Steps come from the phone's own `TYPE_STEP_COUNTER` sensor. That counter reports
 running total since boot, so the service banks the difference between readings and
 treats a reading lower than the last one as a reboot.
 
-That sensor is optional in Android, and the app cannot work without it. `uses-feature` is
-declared `required="false"`, so the listing stays downloadable on every device; the check
-happens at launch instead. A phone with no step counter gets a warning it cannot dismiss
-and the app closes rather than opening, because every activity number comes from this one
-sensor and a screen of zeros would read as a bad day rather than as missing hardware. The
-tracker service refuses to start for the same reason, which also covers the boot path.
+That sensor is optional in Android. A phone without one falls back to `SoftwarePedometer`,
+which counts steps from the accelerometer: it takes the magnitude of the acceleration
+vector, so the count does not depend on how the phone is carried, removes gravity with a
+running mean, and counts upward crossings of a threshold that follows the recent size of
+the bounce. Its steps are banked through the same path, so windows, cadence, calories and
+hourly rows behave identically whichever source is running. Accuracy is lower and it costs
+more battery, so it is never preferred over a step counter the phone already has; samples
+are batched at one second to keep the CPU asleep between them.
+
+`uses-feature` is declared `required="false"`, so the listing stays downloadable on every
+device. Only a phone with neither sensor gets a warning it cannot dismiss, and the app
+closes rather than opening: a screen of zeros would read as a bad day rather than as
+missing hardware. The tracker service refuses to start for the same reason, which also
+covers the boot path.
 
 Steps are also bucketed into 60-second windows. A window opens on the first step after
 a rest, not on the clock, so a walk that starts at 10:00:40 is measured to 10:01:40.
@@ -81,17 +95,29 @@ MET comes from a curve through four anchors, not from bands:
 
 | Steps a minute | MET |
 | --- | --- |
-| 10 | 2.0 |
-| 60 | 2.8 |
+| 10 | 1.40 |
+| 60 | 2.11 |
 | 100 | 3.0 |
 | 130 | 6.0 |
 
-100 and 130 are the published moderate and vigorous cadence thresholds, carrying the MET
-those thresholds were defined against. The two lower anchors are the compendium's slow
-and very slow walking. Anything between two anchors is interpolated, so walking faster
-always earns more and one extra step never moves the rate by more than a fraction. Past
-130 the rate holds flat: at that pace a person is running, and the walking curve stops
-describing them.
+Every anchor comes from the CADENCE-adults work, so the curve traces to one source rather
+than mixing cadence research with compendium walking speeds.
+
+100 and 130 are the published moderate and vigorous cadence thresholds, carrying the 3.0
+and 6.0 MET they were defined against. Between them intensity rises about 1 MET per 10
+steps a minute, which the interpolation reproduces: 110 gives 4.0 and 120 gives 5.0.
+
+Below a breakpoint at 97.2 steps a minute the same work fits a much flatter line,
+`METs = 1.2606 + 0.0141 x cadence`. The two lower anchors are that line at this app's
+floor and at 60 steps a minute. Slow walking costs far less than walking is usually
+credited with, and it matters here because the resting 1.0 is subtracted afterwards.
+
+Anything between two anchors is interpolated, so walking faster always earns more and one
+extra step never moves the rate by more than a fraction. Past 130 the rate holds flat: at
+that pace a person is running, and the walking curve stops describing them.
+
+Source: the CADENCE-adults studies (Tudor-Locke et al.), covering 21-40, 41-60 and 61-85
+year olds, and the narrative review "How fast is fast enough?".
 
 Cadence is first restated as the cadence a person of 170 cm would need to cover the same
 ground, using the stride already derived from height. Energy tracks speed, and at 110

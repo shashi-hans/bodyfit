@@ -64,15 +64,25 @@ object Metrics {
     /**
      * Metabolic cost by cadence, as `steps per minute to MET`, ascending.
      *
-     * 100 and 130 steps a minute are the published moderate and vigorous thresholds, and
-     * they carry the 3.0 and 6.0 MET those thresholds were defined against. The two lower
-     * anchors are the compendium's slow and very slow walking. Anything in between is
-     * interpolated rather than rounded to a band, so walking faster always earns more and
-     * a single step never moves the rate by more than a fraction.
+     * Every anchor comes from the CADENCE-adults work, so the whole curve traces to one
+     * source rather than mixing cadence research with compendium walking speeds.
+     *
+     * 100 and 130 steps a minute are the published moderate and vigorous thresholds,
+     * carrying the 3.0 and 6.0 MET they were defined against; between them the cost rises
+     * about 1 MET per 10 steps a minute, which the interpolation reproduces exactly.
+     *
+     * Below a breakpoint at 97.2 steps a minute the same work fits a much flatter line,
+     * `METs = 1.2606 + 0.0141 x cadence`. The two lower anchors are that line evaluated at
+     * this app's floor and at [ACTIVE_CADENCE]: 1.40 and 2.11. Walking slowly costs far
+     * less than walking is usually credited with, and the gap matters here because the
+     * resting 1.0 is subtracted afterwards.
+     *
+     * Interpolating rather than banding means walking faster always earns more, and a
+     * single step never moves the rate by more than a fraction.
      */
     private val MET_ANCHORS = listOf(
-        MIN_MOVE_STEPS to 2.0,
-        ACTIVE_CADENCE to 2.8,
+        MIN_MOVE_STEPS to 1.40,
+        ACTIVE_CADENCE to 2.11,
         MODERATE_CADENCE to 3.0,
         VIGOROUS_CADENCE to 6.0,
     )

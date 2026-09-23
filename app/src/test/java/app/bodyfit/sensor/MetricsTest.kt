@@ -34,8 +34,8 @@ class MetricsTest {
 
     @Test
     fun `a stroll earns calories, a few steps across a room does not`() {
-        // 10 steps a minute is the lowest anchor, 2.0 MET: (2.0 - 1.0) x 3.5 x 70 / 200
-        assertEquals(1.225, Metrics.kcalForMinute(10, 70), 0.0001)
+        // 10 steps a minute is the lowest anchor, 1.40 MET: (1.40 - 1.0) x 3.5 x 70 / 200
+        assertEquals(0.49, Metrics.kcalForMinute(10, 70), 0.0001)
         assertEquals(0.0, Metrics.kcalForMinute(9, 70), 0.0001)
         assertEquals(0.0, Metrics.kcalForMinute(0, 70), 0.0001)
     }
@@ -44,8 +44,20 @@ class MetricsTest {
     fun `the published thresholds carry the MET they were defined against`() {
         assertEquals(3.0, Metrics.metForCadence(100), 0.0001)
         assertEquals(6.0, Metrics.metForCadence(130), 0.0001)
-        assertEquals(2.8, Metrics.metForCadence(60), 0.0001)
-        assertEquals(2.0, Metrics.metForCadence(10), 0.0001)
+    }
+
+    @Test
+    fun `slow walking follows the sub-breakpoint regression, not a walking-speed table`() {
+        // METs = 1.2606 + 0.0141 x cadence, the fit below the 97.2 steps/min breakpoint.
+        assertEquals(1.40, Metrics.metForCadence(10), 0.01)
+        assertEquals(2.11, Metrics.metForCadence(60), 0.01)
+    }
+
+    @Test
+    fun `the moderate to vigorous band rises about one MET per ten steps a minute`() {
+        // The published relationship between the 100 and 130 thresholds.
+        assertEquals(4.0, Metrics.metForCadence(110), 0.01)
+        assertEquals(5.0, Metrics.metForCadence(120), 0.01)
     }
 
     @Test
