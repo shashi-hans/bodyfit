@@ -90,4 +90,10 @@ login.
 
 - A release keystore and its password. See `docs/release-signing.md`.
 - Screenshots, a 512x512 icon and a feature graphic.
-- Confirmation that API 36 meets the current target-API requirement.
+
+## Target API level
+
+`targetSdk` is 36. Since 31 August 2026 new apps and updates must target Android 16
+(API 36) or higher, so this is the required level and not merely a recent one. Checked
+23 September 2026 against Google's target API level requirements page; the floor rises
+each August, so re-check before a release that lands after the next one.
