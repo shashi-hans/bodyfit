@@ -1,5 +1,6 @@
 package app.bodyfit.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -64,7 +66,7 @@ fun TodayScreen(
     activeDate: String,
     onLogWater: (Int) -> Unit,
     onOpenMenu: () -> Unit,
-    onOpenExercise: () -> Unit,
+    onOpenHealth: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -164,9 +166,42 @@ fun TodayScreen(
             }
         }
 
-        // Distance, move minutes, BMI and wellbeing read as one block, so they share a
-        // single box. Inside it each figure is bare text on a 2x2 grid: four nested cards
-        // would cost a frame and a gap per metric and say nothing extra.
+        // Distance and move minutes are what the tracker measured today. BMI and wellbeing
+        // are not: they are standings derived from the body and the fortnight, so they sit
+        // in their own box with a way through to the working behind them.
+        item {
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                        .height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    PlainStat(
+                        emoji = Metric.DISTANCE.emoji,
+                        label = Metric.DISTANCE.label,
+                        value = Metric.DISTANCE.format(Metric.DISTANCE.value(record, settings)),
+                        unit = Metric.DISTANCE.unit,
+                        caption = "From ${Metric.STEPS.format(record.steps.toDouble())} steps",
+                        modifier = Modifier.weight(1f),
+                    )
+                    PlainStat(
+                        emoji = Metric.MOVE_MINUTES.emoji,
+                        label = Metric.MOVE_MINUTES.label,
+                        value = Metric.MOVE_MINUTES.format(record.moveMinutes.toDouble()),
+                        unit = Metric.MOVE_MINUTES.unit,
+                        caption = "Goal ${settings.moveMinuteGoal} min",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
         item {
             val score = remember(allDays, settings, activeDate) {
                 Insights.healthScore(allDays, settings, Dates.parse(activeDate))
@@ -184,74 +219,41 @@ fun TodayScreen(
             Card(
                 shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenHealth),
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                        .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 16.dp)
+                        .height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Intrinsic height keeps each pair level even when one caption wraps.
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.height(IntrinsicSize.Min),
-                    ) {
-                        PlainStat(
-                            emoji = Metric.DISTANCE.emoji,
-                            label = Metric.DISTANCE.label,
-                            value = Metric.DISTANCE.format(Metric.DISTANCE.value(record, settings)),
-                            unit = Metric.DISTANCE.unit,
-                            caption = "From ${Metric.STEPS.format(record.steps.toDouble())} steps",
-                            modifier = Modifier.weight(1f),
-                        )
-                        PlainStat(
-                            emoji = Metric.MOVE_MINUTES.emoji,
-                            label = Metric.MOVE_MINUTES.label,
-                            value = Metric.MOVE_MINUTES.format(record.moveMinutes.toDouble()),
-                            unit = Metric.MOVE_MINUTES.unit,
-                            caption = "Goal ${settings.moveMinuteGoal} min",
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.height(IntrinsicSize.Min),
-                    ) {
-                        PlainStat(
-                            emoji = "⚖️",
-                            label = "BMI",
-                            value = String.format(Locale.getDefault(), "%.1f", score.bmi),
-                            caption = Insights.bmiBand(score.bmi),
-                            captionColor = bmiColor,
-                            modifier = Modifier.weight(1f),
-                        )
-                        PlainStat(
-                            emoji = "🩺",
-                            label = "Wellbeing",
-                            value = "${score.score}",
-                            unit = "/ 100",
-                            caption = score.band,
-                            captionColor = ratingColor,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    Text(
-                        text = "Wellbeing is indicative only, not a medical assessment. It weighs BMI, " +
-                            "your 14-day step average, age and smoking.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    PlainStat(
+                        emoji = "⚖️",
+                        label = "BMI",
+                        value = String.format(Locale.getDefault(), "%.1f", score.bmi),
+                        caption = Insights.bmiBand(score.bmi),
+                        captionColor = bmiColor,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PlainStat(
+                        emoji = "🩺",
+                        label = "Wellbeing",
+                        value = "${score.score}",
+                        unit = "/ 100",
+                        caption = score.band,
+                        captionColor = ratingColor,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "How these are worked out",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-        }
-
-        item {
-            Button(
-                onClick = onOpenExercise,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("🏋️  Exercise")
             }
         }
 

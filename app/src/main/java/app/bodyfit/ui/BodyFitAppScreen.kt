@@ -74,14 +74,19 @@ private enum class MenuPage(val route: String, val emoji: String, val label: Str
     ABOUT("about", "ℹ️", "About"),
 }
 
-/** Reached from the Today screen rather than the drawer, because it is a doing page. */
-private const val EXERCISE_ROUTE = "exercise"
+/**
+ * Reached from the BMI and wellbeing box on Today rather than from a tab.
+ *
+ * It explains two standings rather than reporting the day, so it is read occasionally and
+ * does not earn a permanent place in the bar the way exercise does.
+ */
+private const val HEALTH_ROUTE = "health"
 
 private enum class Tab(val route: String, val emoji: String, val label: String) {
     TODAY("today", "🏠", "Today"),
     WATER("water", "💧", "Water"),
     TRENDS("trends", "📈", "Trends"),
-    HEALTH("health", "🩺", "Health"),
+    EXERCISE("exercise", "🏋️", "Exercise"),
     GOALS("goals", "🎯", "Goals"),
 }
 
@@ -252,8 +257,8 @@ fun BodyFitAppScreen(
                         activeDate = activeDate,
                         onLogWater = viewModel::logWater,
                         onOpenMenu = { scope.launch { drawerState.open() } },
-                        onOpenExercise = {
-                            navController.navigate(EXERCISE_ROUTE) { launchSingleTop = true }
+                        onOpenHealth = {
+                            navController.navigate(HEALTH_ROUTE) { launchSingleTop = true }
                         },
                         contentPadding = contentPadding,
                     )
@@ -279,11 +284,12 @@ fun BodyFitAppScreen(
                         contentPadding = contentPadding,
                     )
                 }
-                composable(Tab.HEALTH.route) {
+                composable(HEALTH_ROUTE) {
                     HealthScreen(
                         allDays = allDays,
                         settings = settings,
                         activeDate = activeDate,
+                        onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,
                     )
                 }
@@ -343,13 +349,12 @@ fun BodyFitAppScreen(
                         contentPadding = contentPadding,
                     )
                 }
-                composable(EXERCISE_ROUTE) {
+                composable(Tab.EXERCISE.route) {
                     ExerciseScreen(
                         sessions = sessions,
                         onStart = { viewModel.startExercise() },
                         onStop = { type, startedAt, seconds, met -> viewModel.stopExercise(type, startedAt, seconds, met) },
                         onDelete = viewModel::deleteExercise,
-                        onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,
                     )
                 }
