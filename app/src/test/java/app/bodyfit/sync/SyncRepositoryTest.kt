@@ -1,6 +1,7 @@
 package app.bodyfit.sync
 
 import app.bodyfit.data.DailyRecord
+import app.bodyfit.data.ExerciseSession
 import app.bodyfit.data.HealthDao
 import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.WaterEntry
@@ -34,6 +35,9 @@ private class FakeDao(seed: List<DailyRecord> = emptyList()) : HealthDao {
     override suspend fun deleteWaterForDates(dates: List<String>) = Unit
     override suspend fun allHoursOnce(): List<HourlyRecord> = emptyList()
     override suspend fun deleteHoursForDates(dates: List<String>) = Unit
+    override fun observeSessions(date: String): Flow<List<ExerciseSession>> = flowOf(emptyList())
+    override suspend fun insertSession(session: ExerciseSession): Long = 0
+    override suspend fun deleteSessionById(id: Long) = Unit
     override suspend fun waterTotal(date: String): Int = 0
     override suspend fun allWaterEntries(): List<WaterEntry> = emptyList()
     override suspend fun insertWaterEntry(entry: WaterEntry): Long = 0

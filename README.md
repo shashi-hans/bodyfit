@@ -11,7 +11,7 @@ network client and no analytics in the app.
 
 | Tab | What it holds |
 | --- | --- |
-| 🏠 Today | App name and greeting across the top, then one heart per metric (steps, calories, heart points), each filling from the bottom as its goal is approached, with the value and name under each, then water beside its add buttons, one box holding distance, move minutes, BMI and wellbeing, and an exercise list |
+| 🏠 Today | App name and greeting across the top, then one heart per metric (steps, calories, heart points), each filling from the bottom as its goal is approached, with the value and name under each, then water beside its add buttons, one box holding distance, move minutes, BMI and wellbeing, and a button to the exercise page |
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 📈 Trends | One metric at a time over Day, Week or Month. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Tapping a bar in Week or Month opens that day hour by hour |
 | 🩺 Health | BMI with its band, the wellbeing score with its rating, and the arithmetic that produced it line by line |
@@ -20,6 +20,32 @@ network client and no analytics in the app.
 Everything that is not a goal sits behind the menu on the Today screen: About you, default
 cup size, lock screen card, how the numbers work, backup, and about. Each is a page with a
 back arrow, so no subject has two homes.
+
+## Exercise
+
+Box breathing, running, cycling and skipping, reached from a button on Today. Breathing is
+a guided minute that records nothing. The other three run a timer and log a session.
+
+A saved session writes an `exercise_session` row and folds its minutes, calories and heart
+points into the day, so the Today goals count exercise the step sensor cannot see. Sessions
+are kept as rows as well as folded in because a calorie figure with no explanation is not
+checkable: a user who sees 300 kcal appear should be able to find the ride that caused it.
+Removing a session takes its contribution back off the day.
+
+| Activity | MET | Produces steps |
+| --- | --- | --- |
+| Running | 8.0 | yes |
+| Cycling | 7.0 | no |
+| Skipping | 11.0 | no |
+
+Effort is assumed rather than measured: the app has no way to know how hard a ride was, so
+a moderate effort is taken and the screen says so. Calories use the same `(MET - 1)` basis
+as a walked minute, so a logged session and a tracked one mean the same thing.
+
+While a session runs the tracker still counts steps but stops scoring its 60-second
+windows. Without that a run would be billed twice, once through its steps and once through
+the session. The flag lives in the tracker's DataStore rather than the database, because
+the service reads it every five seconds and must not wait on a query to decide.
 
 ## Lock screen
 

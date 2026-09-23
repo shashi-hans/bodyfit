@@ -13,6 +13,7 @@ import java.time.LocalDate
 class HealthRepository(context: Context) {
 
     private val dao = HealthDatabase.get(context).healthDao()
+    private val trackerState = TrackerStateRepository(context.applicationContext)
 
     /** Goal and body-measurement store, used directly by the goals screen for writes. */
     val userSettings = UserSettingsRepository(context.applicationContext)
@@ -99,8 +100,48 @@ class HealthRepository(context: Context) {
 
     suspend fun undoWater(entry: WaterEntry) = dao.removeWater(entry)
 
+    fun observeSessions(date: String = Dates.today()): Flow<List<ExerciseSession>> =
+        dao.observeSessions(date)
+
+    /** Marks an exercise as running, which stops the tracker scoring the same minutes twice. */
+    suspend fun startSession(at: Long = System.currentTimeMillis()) {
+        trackerState.setSessionStartedAt(at)
+    }
+
+    /**
+     * Records a finished exercise and folds it into the day.
+     *
+     * A session under [MIN_SESSION_SECONDS] is discarded: it is a mis-tap, and logging a
+     * four-second run would put a stray row in the list and a rounding error in the totals.
+     * Returns the session written, or null when it was too short.
+     */
+    suspend fun stopSession(type: ExerciseType, startedAt: Long, seconds: Int): ExerciseSession? {
+        trackerState.setSessionStartedAt(0L)
+        if (seconds < MIN_SESSION_SECONDS) return null
+        val minutes = seconds / 60.0
+        val weight = currentSettings().weightKg
+        val session = ExerciseSession(
+            date = Dates.today(),
+            type = type.name,
+            startedAt = startedAt,
+            seconds = seconds,
+            kcal = type.kcal(minutes, weight),
+            heartPoints = type.heartPoints(minutes),
+        )
+        dao.addSession(session, moveMinutes = minutes.toInt())
+        return session
+    }
+
+    /** Takes a session back off the day, for a mis-tap noticed after the fact. */
+    suspend fun deleteSession(session: ExerciseSession) {
+        dao.removeSession(session, moveMinutes = (session.seconds / 60.0).toInt())
+    }
+
     companion object {
         /** Comfortably past the 30-day trends window, so nothing reachable is ever dropped. */
         private const val HOURLY_RETENTION_DAYS = 90L
+
+        /** Below this a session is a mis-tap, not an exercise. */
+        const val MIN_SESSION_SECONDS = 20
     }
 }

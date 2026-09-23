@@ -54,6 +54,7 @@ import app.bodyfit.ui.screens.AboutScreen
 import app.bodyfit.ui.screens.AboutYouScreen
 import app.bodyfit.ui.screens.BackupScreen
 import app.bodyfit.ui.screens.CupSizeScreen
+import app.bodyfit.ui.screens.ExerciseScreen
 import app.bodyfit.ui.screens.GoalsScreen
 import app.bodyfit.ui.screens.HowNumbersWorkScreen
 import app.bodyfit.ui.screens.LockScreenCardScreen
@@ -72,6 +73,9 @@ private enum class MenuPage(val route: String, val emoji: String, val label: Str
     BACKUP("backup", "💾", "Backup"),
     ABOUT("about", "ℹ️", "About"),
 }
+
+/** Reached from the Today screen rather than the drawer, because it is a doing page. */
+private const val EXERCISE_ROUTE = "exercise"
 
 private enum class Tab(val route: String, val emoji: String, val label: String) {
     TODAY("today", "🏠", "Today"),
@@ -116,6 +120,7 @@ fun BodyFitAppScreen(
     val waterEntries by viewModel.waterEntries.collectAsState()
     val hourly by viewModel.hourly.collectAsState()
     val hourlyWater by viewModel.hourlyWater.collectAsState()
+    val sessions by viewModel.sessions.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -247,6 +252,9 @@ fun BodyFitAppScreen(
                         activeDate = activeDate,
                         onLogWater = viewModel::logWater,
                         onOpenMenu = { scope.launch { drawerState.open() } },
+                        onOpenExercise = {
+                            navController.navigate(EXERCISE_ROUTE) { launchSingleTop = true }
+                        },
                         contentPadding = contentPadding,
                     )
                 }
@@ -331,6 +339,16 @@ fun BodyFitAppScreen(
                     BackupScreen(
                         onExport = { exportLauncher.launch(Backup.suggestedFileName()) },
                         onRestore = { restoreLauncher.launch(arrayOf("*/*")) },
+                        onBack = { navController.popBackStack() },
+                        contentPadding = contentPadding,
+                    )
+                }
+                composable(EXERCISE_ROUTE) {
+                    ExerciseScreen(
+                        sessions = sessions,
+                        onStart = { viewModel.startExercise() },
+                        onStop = viewModel::stopExercise,
+                        onDelete = viewModel::deleteExercise,
                         onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,
                     )

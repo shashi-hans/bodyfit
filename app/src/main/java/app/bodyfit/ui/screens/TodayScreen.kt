@@ -16,9 +16,11 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,8 +44,6 @@ import app.bodyfit.insights.Insights
 import app.bodyfit.ui.Metric
 import app.bodyfit.ui.components.AppLogo
 import app.bodyfit.ui.components.BreathingDialog
-import app.bodyfit.ui.components.Exercise
-import app.bodyfit.ui.components.ExerciseCard
 import app.bodyfit.ui.components.GaugeArc
 import app.bodyfit.ui.components.Glyph
 import app.bodyfit.ui.components.SectionHeader
@@ -64,6 +64,7 @@ fun TodayScreen(
     activeDate: String,
     onLogWater: (Int) -> Unit,
     onOpenMenu: () -> Unit,
+    onOpenExercise: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -245,19 +246,13 @@ fun TodayScreen(
             }
         }
 
-        item { SectionHeader(emoji = "🏋️", title = "Exercise") }
-
         item {
-            ExerciseCard(
-                exercises = listOf(
-                    Exercise(
-                        emoji = "🧘",
-                        name = "Box breathing",
-                        description = "Four seconds in, hold, out, hold. Nothing is recorded.",
-                        onStart = { breathing = true },
-                    ),
-                ),
-            )
+            Button(
+                onClick = onOpenExercise,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("🏋️  Exercise")
+            }
         }
 
         item { Spacer(Modifier.height(4.dp)) }

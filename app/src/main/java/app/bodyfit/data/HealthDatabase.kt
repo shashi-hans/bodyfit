@@ -12,8 +12,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * there is no account, no network client and no analytics in this app.
  */
 @Database(
-    entities = [DailyRecord::class, HourlyRecord::class, WaterEntry::class],
-    version = 3,
+    entities = [DailyRecord::class, HourlyRecord::class, WaterEntry::class, ExerciseSession::class],
+    version = 4,
     exportSchema = true,
 )
 abstract class HealthDatabase : RoomDatabase() {
@@ -52,6 +52,29 @@ abstract class HealthDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds timed exercise sessions. Days recorded before this keep their totals; they
+         * simply have no session behind them to explain the figures.
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS exercise_session (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        date TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        startedAt INTEGER NOT NULL,
+                        seconds INTEGER NOT NULL,
+                        kcal REAL NOT NULL,
+                        heartPoints INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_exercise_session_date ON exercise_session(date)")
+            }
+        }
+
         @Volatile
         private var instance: HealthDatabase? = null
 
@@ -60,7 +83,7 @@ abstract class HealthDatabase : RoomDatabase() {
                 context.applicationContext,
                 HealthDatabase::class.java,
                 NAME,
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
     }
 }

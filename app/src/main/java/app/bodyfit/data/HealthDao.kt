@@ -127,6 +127,51 @@ interface HealthDao {
     @Query("DELETE FROM hourly_record WHERE date IN (:dates)")
     suspend fun deleteHoursForDates(dates: List<String>)
 
+    @Query("SELECT * FROM exercise_session WHERE date = :date ORDER BY startedAt DESC")
+    fun observeSessions(date: String): Flow<List<ExerciseSession>>
+
+    @Insert
+    suspend fun insertSession(session: ExerciseSession): Long
+
+    @Query("DELETE FROM exercise_session WHERE id = :id")
+    suspend fun deleteSessionById(id: Long)
+
+    /**
+     * Records a finished exercise and folds it into the day in one transaction.
+     *
+     * Its minutes and heart points land on the day's row like a walked minute would, so
+     * the goals on the Today screen count exercise the tracker cannot see. Steps are not
+     * touched: a ride produces none, and a run's are already counted by the sensor.
+     */
+    @Transaction
+    suspend fun addSession(session: ExerciseSession, moveMinutes: Int) {
+        insertSession(session)
+        val current = getDay(session.date) ?: DailyRecord(date = session.date)
+        upsertDay(
+            current.copy(
+                moveMinutes = current.moveMinutes + moveMinutes,
+                heartPoints = current.heartPoints + session.heartPoints,
+                activeKcal = current.activeKcal + session.kcal,
+                updatedAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
+    /** Removes a session and takes its contribution back off the day. */
+    @Transaction
+    suspend fun removeSession(session: ExerciseSession, moveMinutes: Int) {
+        deleteSessionById(session.id)
+        val current = getDay(session.date) ?: return
+        upsertDay(
+            current.copy(
+                moveMinutes = (current.moveMinutes - moveMinutes).coerceAtLeast(0),
+                heartPoints = (current.heartPoints - session.heartPoints).coerceAtLeast(0),
+                activeKcal = (current.activeKcal - session.kcal).coerceAtLeast(0.0),
+                updatedAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
     /**
      * Writes a backup's rows over the days it covers, in one transaction.
      *

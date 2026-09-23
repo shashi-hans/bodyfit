@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.bodyfit.data.DailyRecord
 import app.bodyfit.data.Dates
+import app.bodyfit.data.ExerciseSession
+import app.bodyfit.data.ExerciseType
 import app.bodyfit.data.HealthRepository
 import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.Sex
@@ -75,6 +77,21 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     val hourlyWater: StateFlow<List<WaterEntry>> = hourlyDate
         .flatMapLatest { date -> date?.let { repository.observeWaterEntries(it) } ?: flowOf(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Exercise logged today, newest first. */
+    val sessions: StateFlow<List<ExerciseSession>> = dateKey
+        .flatMapLatest { repository.observeSessions(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun startExercise() = viewModelScope.launch { repository.startSession() }
+
+    fun stopExercise(type: ExerciseType, startedAt: Long, seconds: Int) = viewModelScope.launch {
+        repository.stopSession(type, startedAt, seconds)
+    }
+
+    fun deleteExercise(session: ExerciseSession) = viewModelScope.launch {
+        repository.deleteSession(session)
+    }
 
     fun showHoursFor(date: String?) {
         hourlyDate.value = date

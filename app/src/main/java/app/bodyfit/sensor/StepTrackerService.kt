@@ -92,6 +92,9 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
     private var notifiedDate = Dates.today()
 
     private var settings = UserSettings()
+
+    /** True while a timed exercise is logging, which owns the scoring for its duration. */
+    private var sessionActive = false
     private var notificationJob: Job? = null
 
     override fun onCreate() {
@@ -112,6 +115,9 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
         }
         lifecycleScope.launch {
             repository.settings.collect { settings = it }
+        }
+        lifecycleScope.launch {
+            trackerState.sessionActive.collect { sessionActive = it }
         }
         restartNotificationUpdates()
         handler.postDelayed(ticker, TICK_MS)
@@ -263,11 +269,15 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
         val windowClosed = windowStartMs >= 0 && now - windowStartMs >= WINDOW_MS
 
         if (windowClosed) {
-            val ranForMinutes = (now - windowStartMs) / WINDOW_MS.toDouble()
-            val cadence = (stepsInWindow / ranForMinutes).toInt()
-            if (Metrics.isMoveMinute(cadence)) moveMinutes = 1
-            heartPoints = Metrics.heartPointsForMinute(cadence)
-            kcal = Metrics.kcalForMinute(cadence, settings.weightKg, settings.heightCm) * ranForMinutes
+            // A timed exercise scores its own minutes. Scoring this window as well would
+            // bill a run twice: once through its steps and once through the session.
+            if (!sessionActive) {
+                val ranForMinutes = (now - windowStartMs) / WINDOW_MS.toDouble()
+                val cadence = (stepsInWindow / ranForMinutes).toInt()
+                if (Metrics.isMoveMinute(cadence)) moveMinutes = 1
+                heartPoints = Metrics.heartPointsForMinute(cadence)
+                kcal = Metrics.kcalForMinute(cadence, settings.weightKg, settings.heightCm) * ranForMinutes
+            }
             scoreDate = windowDate
             scoreHour = windowHour
             stepsInWindow = 0
