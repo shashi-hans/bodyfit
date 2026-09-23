@@ -312,10 +312,20 @@ tracker switch is not restored: whether this phone is counting is a property of 
 
 ### Weekly backup
 
-The backup page can also write on a schedule. The user picks a file once, the app takes
-persistable URI permission on it, and a WorkManager job rewrites that same file every week.
-The grant has to be persisted or the first scheduled run a day later fails with a security
-error nobody is present to see.
+The backup runs on a schedule from the moment the app is installed, with nothing to switch
+on. A WorkManager job rewrites `Download/backup/bodyfit-weekly-backup.json` every week.
+
+That folder rather than the app's own is so the file survives an uninstall and a file
+manager can copy it off the phone. Android 10 onwards an app cannot create a folder at the
+root of shared storage, so the write goes through MediaStore's Downloads collection, which
+needs no permission and no prompt. The row is looked up by name and reused; a repeated
+insert would answer with `bodyfit-weekly-backup (1).json` and leave the user a year of
+them. The cost of sitting outside the app is that any app granted storage access can read
+it, and the file holds the whole history. The page says so.
+
+"Choose a file" points the schedule anywhere else instead. The app takes persistable URI
+permission on what the user picks, or the first scheduled run a day later fails with a
+security error nobody is present to see.
 
 One file is overwritten rather than a new one written each time, so a year does not leave
 52 copies on a drive. The stream is opened in `wt` mode: without truncation a shorter

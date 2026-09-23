@@ -366,12 +366,13 @@ fun BodyFitAppScreen(
                         onExport = { exportLauncher.launch(Backup.suggestedFileName()) },
                         onRestore = { restoreLauncher.launch(arrayOf("*/*")) },
                         autoTarget = autoBackupTarget,
+                        autoDefaultLabel = viewModel.autoBackupDefaultLabel,
                         autoLastRun = autoBackupLastRun,
                         autoError = autoBackupError,
                         onChooseAutoTarget = {
                             autoBackupLauncher.launch(Backup.autoBackupFileName())
                         },
-                        onDisableAuto = viewModel::disableAutoBackup,
+                        onUseDefaultLocation = viewModel::useDefaultBackupLocation,
                         onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,
                     )

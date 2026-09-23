@@ -1,12 +1,8 @@
 package app.bodyfit
 
 import android.app.Application
-import app.bodyfit.data.AutoBackupSettings
 import app.bodyfit.data.AutoBackupWorker
 import app.bodyfit.notification.ActivityNotification
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 class BodyFitApp : Application() {
 
@@ -18,10 +14,10 @@ class BodyFitApp : Application() {
         // Re-asserted on every launch. WorkManager keeps its own schedule across reboots,
         // but an app update or a force stop can drop it, and a weekly backup that quietly
         // stopped running is worse than one that never existed.
-        CoroutineScope(Dispatchers.IO).launch {
-            if (AutoBackupSettings(this@BodyFitApp).targetOnce() != null) {
-                AutoBackupWorker.schedule(this@BodyFitApp)
-            }
-        }
+        // Scheduled unconditionally: the weekly backup is on from install, writing to the
+        // app's own folder until the user picks somewhere else. Re-asserted on every launch
+        // because an update or a force stop can drop the schedule, and a weekly backup that
+        // quietly stopped running is worse than one that never existed.
+        AutoBackupWorker.schedule(this)
     }
 }

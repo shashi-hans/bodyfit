@@ -159,6 +159,9 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     val autoBackupError: StateFlow<String?> = autoBackup.lastError
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Where the backup goes when nothing has been chosen. */
+    val autoBackupDefaultLabel: String = autoBackup.defaultLocationLabel()
+
     /** Remembers the chosen file, writes it once now, and schedules the weekly repeat. */
     fun enableAutoBackup(uri: Uri) = viewModelScope.launch {
         autoBackup.setTarget(uri)
@@ -172,9 +175,17 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         AutoBackupWorker.schedule(context)
     }
 
-    fun disableAutoBackup() = viewModelScope.launch {
+    /**
+     * Goes back to the default folder. The schedule stays: the backup is never off, only
+     * pointed somewhere else.
+     */
+    fun useDefaultBackupLocation() = viewModelScope.launch {
         autoBackup.clearTarget()
-        AutoBackupWorker.cancel(getApplication())
+        runCatching {
+            autoBackup.writeDefault(repository.backupJson())
+        }.onSuccess { autoBackup.recordRun(System.currentTimeMillis(), error = null) }
+            .onFailure { autoBackup.recordRun(System.currentTimeMillis(), it.message) }
+        AutoBackupWorker.schedule(getApplication())
     }
 
     /** Serialises everything to JSON for the backup file. */

@@ -343,10 +343,11 @@ fun BackupScreen(
     onExport: () -> Unit,
     onRestore: () -> Unit,
     autoTarget: Uri?,
+    autoDefaultLabel: String,
     autoLastRun: Long,
     autoError: String?,
     onChooseAutoTarget: () -> Unit,
-    onDisableAuto: () -> Unit,
+    onUseDefaultLocation: () -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
@@ -382,21 +383,23 @@ fun BackupScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                KeyValueRow("Status", if (autoTarget == null) "Off" else "On")
-                if (autoTarget != null) {
-                    KeyValueRow(
-                        "Last written",
-                        if (autoLastRun > 0) Dates.dayLabel(Dates.of(autoLastRun)) else "Not yet",
-                    )
-                }
+                KeyValueRow("Status", "On")
+                KeyValueRow("Writes to", if (autoTarget == null) autoDefaultLabel else "A file you chose")
+                KeyValueRow(
+                    "Last written",
+                    if (autoLastRun > 0) Dates.dayLabel(Dates.of(autoLastRun)) else "Not yet",
+                )
                 Text(
                     text = if (autoTarget == null) {
-                        "Choose a file once and the app rewrites it every week, so a phone lost " +
-                            "between manual exports does not cost you a year. The same file is " +
-                            "overwritten each time rather than a new one added."
+                        "On from the moment the app is installed, rewriting one file every " +
+                            "week rather than adding a new one. It sits outside the app, so " +
+                            "uninstalling does not take it with you and a file manager can " +
+                            "copy it off the phone. It holds your whole history, so any app " +
+                            "you give storage access to can read it. Pick another file to " +
+                            "keep it somewhere only you reach."
                     } else {
-                        "The chosen file is rewritten every week. Nothing is sent anywhere: it " +
-                            "is written straight to the location you picked."
+                        "The file you chose is rewritten every week. Nothing is sent anywhere: " +
+                            "it is written straight to that location."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -413,7 +416,7 @@ fun BackupScreen(
                         Text(if (autoTarget == null) "Choose a file" else "Change file")
                     }
                     if (autoTarget != null) {
-                        OutlinedButton(onClick = onDisableAuto) { Text("Turn off") }
+                        OutlinedButton(onClick = onUseDefaultLocation) { Text("Use default folder") }
                     }
                 }
                 Text(
