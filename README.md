@@ -204,8 +204,8 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 ## Chart colors
 
 The Today card carries the day's figures on the left and three nested rings on the right:
-steps green, calories yellow, heart points red. Each figure sits beside its own icon,
-footprints, a flame and a heart, and is printed in its ring's colour so the two pair
+steps green, calories yellow, heart points red. Each figure sits beside its own mark,
+footprints, the fire emoji and a heart, and is printed in its ring's colour so the two pair
 without counting inwards from the outside.
 
 A circle's perimeter is uniform, so a given share of the goal is always the same length of

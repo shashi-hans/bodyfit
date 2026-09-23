@@ -81,7 +81,9 @@ fun TodayGauge(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Column(
-            modifier = Modifier.weight(1f),
+            // The figures are the point and they set the type size, so they take the
+            // larger share. The rings stay readable well below half the row.
+            modifier = Modifier.weight(1.25f),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             arcs.forEach { arc ->
@@ -90,14 +92,14 @@ fun TodayGauge(
                         emoji = arc.emoji,
                         iconRes = arc.iconRes,
                         vector = arc.vector,
-                        size = 20.dp,
+                        size = 24.dp,
                         tint = arc.color,
                     )
                     Spacer(Modifier.width(8.dp))
                     Column {
                         Text(
                             text = arc.value,
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.headlineSmall,
                             // The figure wears its ring's colour, so the eye can pair the
                             // two without counting inwards from the outside. A text-safe
                             // shade of it: the mark colours are too faint to read as a
@@ -108,7 +110,7 @@ fun TodayGauge(
                         )
                         Text(
                             text = "of ${arc.goalLabel}",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -120,7 +122,7 @@ fun TodayGauge(
 
         Canvas(
             modifier = Modifier
-                .weight(1f)
+                .weight(0.95f)
                 .aspectRatio(1f),
         ) {
             val stroke = ringWidth.toPx()

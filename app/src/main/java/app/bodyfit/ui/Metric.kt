@@ -33,7 +33,7 @@ enum class Metric(
 ) {
 
     STEPS("👣", "Steps", "steps", R.drawable.ic_footsteps),
-    CALORIES("🔥", "Calories", "kcal", R.drawable.ic_flame),
+    CALORIES("🔥", "Calories", "kcal"),
     DISTANCE("📍", "Distance", "km"),
     MOVE_MINUTES("⏱️", "Move minutes", "min"),
     HEART_POINTS("🫀", "Heart points", "pts"),
