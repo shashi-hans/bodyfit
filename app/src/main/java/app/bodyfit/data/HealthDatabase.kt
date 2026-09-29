@@ -23,7 +23,7 @@ abstract class HealthDatabase : RoomDatabase() {
     companion object {
         private const val NAME = "bodyfit.db"
 
-        /** Adds `updatedAt` for sync. Existing rows get 0, so the first sync pushes them all. */
+        /** Adds `updatedAt`. Rows written before it get 0, which reads as "never changed". */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE daily_record ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")

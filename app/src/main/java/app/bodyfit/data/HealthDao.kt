@@ -31,10 +31,6 @@ interface HealthDao {
     @Query("SELECT * FROM daily_record WHERE date = :date")
     suspend fun getDay(date: String): DailyRecord?
 
-    /** Days changed locally since [since], oldest first. The push side of sync reads this. */
-    @Query("SELECT * FROM daily_record WHERE updatedAt > :since ORDER BY updatedAt")
-    suspend fun changedSince(since: Long): List<DailyRecord>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDay(record: DailyRecord)
 
