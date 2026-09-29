@@ -31,19 +31,26 @@ import app.bodyfit.R
  * reads as depth instead of as a displaced second copy of the letters.
  */
 @Composable
-fun AppLogo(modifier: Modifier = Modifier) {
+fun AppLogo(modifier: Modifier = Modifier, compact: Boolean = false) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Image(
             painter = painterResource(R.drawable.ic_launcher_foreground),
             contentDescription = null,
             modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(11.dp))
+                .size(if (compact) 28.dp else 36.dp)
+                .clip(RoundedCornerShape(if (compact) 9.dp else 11.dp))
                 .background(colorResource(R.color.ic_launcher_background)),
         )
-        Spacer(Modifier.width(9.dp))
+        Spacer(Modifier.width(if (compact) 7.dp else 9.dp))
 
-        val wordmark = MaterialTheme.typography.headlineSmall.copy(
+        // Compact is for the Today header, where the greeting block beside it needs the
+        // width more than the wordmark does.
+        val base = if (compact) {
+            MaterialTheme.typography.titleMedium
+        } else {
+            MaterialTheme.typography.headlineSmall
+        }
+        val wordmark = base.copy(
             fontWeight = FontWeight.Black,
             letterSpacing = (-0.6).sp,
             shadow = Shadow(

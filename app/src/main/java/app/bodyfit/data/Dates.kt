@@ -19,6 +19,22 @@ object Dates {
     /** Local hour of the day, 0 to 23, the key of an [HourlyRecord]. */
     fun currentHour(): Int = LocalTime.now().hour
 
+    /**
+     * How much of [key] has passed, 0 at midnight and 1 at the end of the day.
+     *
+     * A day already finished counts whole, so a figure that accrues through the day reads
+     * the same tomorrow as it did at last night's midnight rather than shrinking.
+     */
+    fun elapsedFraction(key: String, now: LocalDateTime = LocalDateTime.now()): Double {
+        val date = parse(key)
+        val today = now.toLocalDate()
+        return when {
+            date < today -> 1.0
+            date > today -> 0.0
+            else -> now.toLocalTime().toSecondOfDay() / 86_400.0
+        }
+    }
+
     /** The local date an epoch timestamp falls on, as an ISO key. */
     fun of(epochMillis: Long): String =
         Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate().toString()

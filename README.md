@@ -11,7 +11,7 @@ network client and no analytics in the app.
 
 | Tab | What it holds |
 | --- | --- |
-| 🏠 Today | App name and greeting across the top, then the day's figures on the left beside their icons, each printed in its own colour, with three nested rings on the right, then water beside its add buttons, a box holding distance and move minutes, and a second holding BMI and wellbeing that opens their working |
+| 🏠 Today | "Hi, <name>" and the greeting down the left of the top row beside the menu, the app mark and name on the right, then four nested arcs over the day's six figures, three to a row, each beside its icon and printed in its own colour, then the water add buttons, and a box holding BMI and wellbeing that opens their working |
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 🏋️ Exercise | Box breathing, running, cycling and skipping, and today's logged sessions |
 | 📈 Trends | One metric at a time over Day, Week or Month, with the day's logged exercise under the chart. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Arrows step back and forward a span at a time, back only as far as there is data. Tapping a bar in Week or Month opens that day hour by hour |
@@ -263,36 +263,53 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 
 ## Chart colors
 
-The Today card carries the day's figures on the left and three nested rings on the right:
-steps green, calories yellow, heart points red. Each figure sits beside its own mark,
-footprints, the fire emoji and a heart, and is printed in its ring's colour so the two pair
-without counting inwards from the outside. The figure is bare and the line under it carries
-the unit: at this size "3,768 steps" costs the width the three rings need, and printing the
-unit twice buys nothing.
+The Today card carries four nested half-circle arcs across the top and six figures
+underneath, three to a row. The arcs are steps yellow, calories red, heart points green and
+water blue; move minutes is cyan and distance violet, printed as figures with no arc, because
+distance is steps counted a second way and move minutes track the same walking, so either
+curve would retrace the steps arc. Cyan and violet replaced a green and a pink that sat next
+to heart points and calories in the grid and read as the same measurement twice.
 
-A circle's perimeter is uniform, so a given share of the goal is always the same length of
-arc. The shapes tried before this could not manage that. A heart traced by a band has an
-uneven perimeter, and emblems filling from the bottom have an uneven area: a heart is
-narrow at its point and wide at its lobes, so filling half its height covers well under
-half its ink, while a flame does the reverse. Three metrics at the same percentage looked
-different on each. The icons stay, beside the figures, carrying identity without also being
+The well the arcs enclose holds the day's activity calories, which is the largest clear area
+on the card and so carries the number worth reading first. Its info button sits above the
+figure rather than under it: the well is read top down, and a button under the caption sat
+closer to the figures below than to the number it belongs to.
+
+The three columns of figures are aligned to the arc above them, the first flush left, the
+last flush right and the middle centred, so the block reads as one shape with the arcs
+instead of as a second grid stacked under them. The calorie figure in the grid is
+the whole day's burn, activity plus the resting energy the day has accrued, prorated from
+Mifflin-St Jeor across the hours elapsed. Two numbers rather than one because they answer
+different questions: the goal is an activity target, and the total is what another tracker
+would call "calories". Three round buttons open what a figure is made of: the total says what it counts and why the
+goal is not scored against it, and the activity calories and heart points each break down
+into walking and one line per logged session. The walking share is the day's total less the
+sessions rather than a figure of its own, so the lines always add up to the number on the
+card. The buttons are filled circles rather than bare glyphs, because a plain icon beside a
+number reads as part of the label. Resting burn is prorated straight-line through the day; it is not
+actually flat, being lower asleep and higher after a meal, but nothing here measures either. Each figure sits beside its own mark and is printed in its own colour,
+so a figure and its arc pair without counting inwards from the outside. The figure is bare
+and the line under it carries the unit: at this size "3,768 steps" costs the width a second
+figure needs, and printing the unit twice buys nothing.
+
+Half a circle rather than a whole one so the arcs take a band the width of the card instead
+of a disc beside the figures, which leaves the figures the full width and room to stay large
+at six of them. An arc's length is uniform along its sweep, so a given share of the goal is
+always the same run of ink. The shapes tried before this could not manage that. A heart
+traced by a band has an uneven perimeter, and emblems filling from the bottom have an uneven
+area: a heart is narrow at its point and wide at its lobes, so filling half its height covers
+well under half its ink, while a flame does the reverse. The same percentage looked different
+on each metric. The icons stay, beside the figures, carrying identity without also being
 asked to carry measurement.
 
-The figures are printed in text-safe shades of the three hues rather than the hues
-themselves. A colour that passes as a mark need not pass as a figure: measured against the
-card, the mark colours give 1.90:1 for calories in light and 3.45:1 for steps in dark, well
-under the 4.5:1 body text needs. The text variants clear 5:1 in both themes. The outline means an empty heart still reads as its metric
-rather than as a grey blank, and the goal gives the fill level a scale to be read against.
+Six hues at once is still past what colour alone can separate, even after the cyan and
+violet. Identity therefore rests on the emoji and the number under each arc, and colour
+carries nothing on its own.
 
-Three nested bands round one outline came first and were dropped: a share of the goal is
-read as a position along a curve, which is far harder than a fill level, and the bands
-crowded together where the shape narrows to its point. The outline is the usual
-`x = 16 sin^3 t` parametric, sampled into a path; its extent is computed from the samples
-rather than assumed, because the lobes peak near y = 11.9 and a height guessed from the
-formula's value at t = 0 clips them.
-Water, distance and move minutes are neutral cards there, and take their own hue only
-where they are the single colored thing on screen: the water glass on its own tab, and
-the weekly chart, which draws one metric at a time.
+The figures are printed in text-safe shades of the six hues rather than the hues themselves.
+A colour that passes as a mark need not pass as a figure: measured against the card, the mark
+colours give 1.90:1 for the yellow in light and 3.45:1 for the green in dark, well under the
+4.5:1 body text needs. The text variants clear 5:1 in both themes.
 
 Marks shown together must stay apart for colorblind readers, and yellow, red and green
 are the hardest set for that. The dark steps are therefore not the light hues dimmed:

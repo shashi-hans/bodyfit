@@ -209,4 +209,14 @@ object Insights {
         }
         return (base + sexTerm).coerceAtLeast(0.0)
     }
+
+    /**
+     * Resting energy spent by [fractionOfDay], where 0 is midnight and 1 the end of the day.
+     *
+     * Straight-line through the day. Resting burn is not actually flat, being lower asleep
+     * and higher after a meal, but nothing here measures either, and a curve invented to
+     * look plausible would be a worse answer than the average it is drawn around.
+     */
+    fun restingKcalSoFar(settings: UserSettings, fractionOfDay: Double): Double =
+        restingKcalPerDay(settings) * fractionOfDay.coerceIn(0.0, 1.0)
 }

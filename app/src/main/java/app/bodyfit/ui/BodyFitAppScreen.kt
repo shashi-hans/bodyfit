@@ -293,6 +293,7 @@ fun BodyFitAppScreen(
                         record = today,
                         week = week,
                         allDays = allDays,
+                        sessions = sessions,
                         settings = settings,
                         activeDate = activeDate,
                         onLogWater = viewModel::logWater,

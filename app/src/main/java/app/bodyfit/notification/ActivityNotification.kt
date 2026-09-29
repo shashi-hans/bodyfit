@@ -69,7 +69,12 @@ object ActivityNotification {
         // percentage rides along in the title instead.
         val builder = base(context)
             .setContentTitle("👣 ${format(record.steps)} steps · $percent%")
-            .setContentText("🔥 $kcal kcal   💧 ${Volume.format(record.waterMl)} / ${Volume.format(settings.waterGoalMl)}")
+            // Heart points earn their place on the collapsed line: they are the one figure
+            // here that says how hard the walking was rather than how much of it there was.
+            // The water goal moves to the expanded view to pay for the room.
+            .setContentText(
+                "🔥 $kcal kcal   🫀 ${record.heartPoints} pts   💧 ${Volume.format(record.waterMl)}"
+            )
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
                     buildString {
