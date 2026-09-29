@@ -336,7 +336,26 @@ tracker switch is not restored: whether this phone is counting is a property of 
 ### Weekly backup
 
 The backup runs on a schedule from the moment the app is installed, with nothing to switch
-on. A WorkManager job rewrites `Download/backup/bodyfit-weekly-backup.json` every week.
+on. A WorkManager job rewrites `Download/backup/bodyfit-backup.json` every day.
+
+One file, never a second one. The row MediaStore created is remembered in the backup's own
+settings, so every later write reuses it rather than looking the file up by name again; a
+lookup that misses ends in an insert, and MediaStore answers an insert of a name that already
+exists with `bodyfit-backup (1).json` instead of failing. An insert also deletes any numbered
+copies the app still owns. The liveness check on the remembered row is a query, not an open
+for writing: MediaStore truncates on a `w` open, so checking that way would empty the very
+file it was checking.
+
+The one case beyond reach is a reinstall or a cleared app. Ownership of the old row is gone
+with the old install, and reading another owner's row needs All files access, which Play
+grants to file managers and little else. The app writes a fresh file and the previous one
+stays until the user deletes it.
+
+Daily rather than weekly because the file is the only copy: nothing syncs, so the gap between
+the last backup and a lost phone is the history that is gone. One rewrite of one file a day
+costs nothing measurable and cuts that gap from seven days to one. The cadence is not in the
+filename, and was once: moving from weekly to daily then meant either a lie in the name or an
+orphaned file on every phone.
 
 That folder rather than the app's own is so the file survives an uninstall and a file
 manager can copy it off the phone. Android 10 onwards an app cannot create a folder at the

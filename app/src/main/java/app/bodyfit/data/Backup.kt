@@ -23,8 +23,13 @@ object Backup {
 
     fun suggestedFileName(today: String = Dates.today()): String = "bodyfit-backup-$today.json"
 
-    /** Undated, because the weekly backup rewrites one file rather than adding to a pile. */
-    fun autoBackupFileName(): String = "bodyfit-weekly-backup.json"
+    /**
+     * Undated, because the scheduled backup rewrites one file rather than adding to a pile.
+     *
+     * The cadence is not in the name either. It was once, and changing weekly to daily then
+     * meant either a lie in the filename or an orphaned file on every phone.
+     */
+    fun autoBackupFileName(): String = "bodyfit-backup.json"
 
     fun toJson(
         days: List<DailyRecord>,

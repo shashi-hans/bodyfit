@@ -42,6 +42,15 @@ class HealthRepository(context: Context) {
 
     suspend fun allDays(): List<DailyRecord> = dao.allDaysOnce()
 
+    /**
+     * Whether there is any history worth writing to a backup.
+     *
+     * The scheduled backup asks before it writes. A database with no days in it produces a
+     * perfectly valid backup of nothing, and writing that over the only good copy is how a
+     * user who cleared the app's data loses the history they cleared it to recover.
+     */
+    suspend fun hasAnythingToBackUp(): Boolean = dao.allDaysOnce().isNotEmpty()
+
     /** Snapshot for the backup writer. */
     suspend fun backupJson(): String = Backup.toJson(
         days = allDays(),

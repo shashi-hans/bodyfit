@@ -379,7 +379,7 @@ fun BackupScreen(
         item {
             SettingsCard {
                 Text(
-                    text = "🔁  Weekly backup",
+                    text = "🔁  Daily backup",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -392,13 +392,13 @@ fun BackupScreen(
                 Text(
                     text = if (autoTarget == null) {
                         "On from the moment the app is installed, rewriting one file every " +
-                            "week rather than adding a new one. It sits outside the app, so " +
+                            "day rather than adding a new one. It sits outside the app, so " +
                             "uninstalling does not take it with you and a file manager can " +
                             "copy it off the phone. It holds your whole history, so any app " +
                             "you give storage access to can read it. Pick another file to " +
                             "keep it somewhere only you reach."
                     } else {
-                        "The file you chose is rewritten every week. Nothing is sent anywhere: " +
+                        "The file you chose is rewritten every day. Nothing is sent anywhere: " +
                             "it is written straight to that location."
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -420,7 +420,7 @@ fun BackupScreen(
                     }
                 }
                 Text(
-                    text = "The weekly write waits for the battery not to be low, so it can " +
+                    text = "The daily write waits for the battery not to be low, so it can " +
                         "land a few hours late.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
