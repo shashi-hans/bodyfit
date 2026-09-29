@@ -58,7 +58,7 @@ object Backup {
                 put("moveMinuteGoal", settings.moveMinuteGoal)
                 put("weeklyStepGoal", settings.weeklyStepGoal)
                 put("weeklyHeartPointGoal", settings.weeklyHeartPointGoal)
-                put("defaultCupMl", settings.defaultCupMl)
+                put("cupSizesMl", JSONArray(settings.cupSizesMl))
             },
         )
 
@@ -203,7 +203,7 @@ object Backup {
                     "weeklyHeartPointGoal",
                     current.weeklyHeartPointGoal,
                 ),
-                defaultCupMl = settingsJson.optInt("defaultCupMl", current.defaultCupMl),
+                cupSizesMl = cupSizes(settingsJson) ?: current.cupSizesMl,
             )
         }
 
@@ -275,6 +275,22 @@ object Backup {
             sessions = sessions,
             settings = settings,
         )
+    }
+
+    /**
+     * Reads the cup sizes from a settings block, or null when the file has none.
+     *
+     * Files written before three sizes carry a single `defaultCupMl`; that becomes the first
+     * size, with 500 ml beside it, matching the two buttons those versions showed.
+     */
+    private fun cupSizes(settingsJson: JSONObject): List<Int>? {
+        settingsJson.optJSONArray("cupSizesMl")?.let { array ->
+            return UserSettings.normalizeCups((0 until array.length()).map { array.optInt(it) })
+        }
+        if (settingsJson.has("defaultCupMl")) {
+            return UserSettings.normalizeCups(listOf(settingsJson.optInt("defaultCupMl"), 500))
+        }
+        return null
     }
 
     /** Reads a file the user picked. Throws whatever the content resolver throws. */

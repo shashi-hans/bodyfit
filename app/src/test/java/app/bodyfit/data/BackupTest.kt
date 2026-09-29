@@ -73,7 +73,7 @@ class BackupTest {
         for (key in listOf(
             "heightCm", "weightKg", "age", "smoker", "stepGoal", "waterGoalMl",
             "calorieGoal", "heartPointGoal", "moveMinuteGoal", "weeklyStepGoal",
-            "weeklyHeartPointGoal", "defaultCupMl",
+            "weeklyHeartPointGoal", "cupSizesMl",
         )) {
             assertTrue("$key missing from the backup", s.has(key))
         }
@@ -123,5 +123,24 @@ class BackupTest {
     fun `a file written before sessions existed restores without them`() {
         val older = parsed().apply { remove("sessions") }.toString()
         assertEquals(emptyList<ExerciseSession>(), Backup.fromJson(older, UserSettings()).sessions)
+    }
+
+    @Test
+    fun `cup sizes round-trip through a backup`() {
+        val json = Backup.toJson(emptyList(), emptyList(), emptyList(), emptyList(), UserSettings(cupSizesMl = listOf(150, 350, 750)))
+        assertEquals(listOf(150, 350, 750), Backup.fromJson(json, UserSettings()).settings.cupSizesMl)
+    }
+
+    @Test
+    fun `a single default cup from an older file becomes that size plus 500 ml`() {
+        val older = """{"format":1,"settings":{"defaultCupMl":300}}"""
+        assertEquals(listOf(200, 300, 500), Backup.fromJson(older, UserSettings()).settings.cupSizesMl)
+    }
+
+    @Test
+    fun `short, duplicate or out-of-range cup lists still give three sizes`() {
+        assertEquals(listOf(200, 250, 1_000), UserSettings.normalizeCups(listOf(5_000, 5_000)))
+        assertEquals(listOf(50, 200, 250), UserSettings.normalizeCups(listOf(10)))
+        assertEquals(listOf(200, 250, 500), UserSettings.normalizeCups(emptyList()))
     }
 }

@@ -25,6 +25,7 @@ import app.bodyfit.data.UserSettings
 import app.bodyfit.notification.ActivityNotification
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -326,24 +327,27 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
         }
     }
 
-    /** Redraws the card whenever today's row changes, including water logged elsewhere. */
+    /**
+     * Redraws the card whenever today's row or the settings change, including water logged
+     * elsewhere and new cup sizes.
+     */
     private fun restartNotificationUpdates() {
         notificationJob?.cancel()
         notificationJob = lifecycleScope.launch {
             val date = Dates.today()
-            repository.observeDay(date).collectLatest { record ->
-                if (!Permissions.hasNotifications(this@StepTrackerService)) return@collectLatest
-                // The collector above already holds these. Reading them back from DataStore
-                // here meant a disk-backed read every time the day's row changed, which
-                // while someone is walking is once every tick.
-                val card = ActivityNotification.build(this@StepTrackerService, record, settings)
-                try {
-                    NotificationManagerCompat.from(this@StepTrackerService).notify(ActivityNotification.ID, card)
-                } catch (e: SecurityException) {
-                    // Notification access was revoked between the check above and this call.
-                    Log.w(TAG, "cannot post the lock-screen card", e)
+            // DataStore's flow emits from memory after the first read and only on a write, so
+            // combining it here adds no disk read per step tick.
+            combine(repository.observeDay(date), repository.settings) { record, current -> record to current }
+                .collectLatest { (record, current) ->
+                    if (!Permissions.hasNotifications(this@StepTrackerService)) return@collectLatest
+                    val card = ActivityNotification.build(this@StepTrackerService, record, current)
+                    try {
+                        NotificationManagerCompat.from(this@StepTrackerService).notify(ActivityNotification.ID, card)
+                    } catch (e: SecurityException) {
+                        // Notification access was revoked between the check above and this call.
+                        Log.w(TAG, "cannot post the lock-screen card", e)
+                    }
                 }
-            }
         }
     }
 

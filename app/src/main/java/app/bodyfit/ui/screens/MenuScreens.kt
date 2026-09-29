@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,6 +46,7 @@ import app.bodyfit.R
 import app.bodyfit.data.Dates
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
+import app.bodyfit.data.Volume
 import app.bodyfit.ui.components.GoalSlider
 import app.bodyfit.ui.components.InfoLine
 import app.bodyfit.ui.components.KeyValueRow
@@ -224,33 +227,44 @@ private fun NameField(value: String, onValue: (String) -> Unit) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CupSizeScreen(
     settings: UserSettings,
-    onDefaultCup: (Int) -> Unit,
+    onCupSizes: (List<Int>) -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
-    MenuPage("Default cup size", onBack, contentPadding, modifier) {
+    // Held locally so the user can clear one size before picking its replacement. Saved
+    // only when exactly three are picked, so the stored set is never short.
+    var picked by remember(settings.cupSizesMl) { mutableStateOf(settings.cupSizesMl.toSet()) }
+    MenuPage("Cup sizes", onBack, contentPadding, modifier) {
         item {
             SettingsCard {
-                Row(
+                FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     UserSettings.CUP_SIZES_ML.forEach { size ->
+                        val selected = size in picked
                         FilterChip(
-                            selected = size == settings.defaultCupMl,
-                            onClick = { onDefaultCup(size) },
-                            label = { Text("$size") },
+                            selected = selected,
+                            enabled = selected || picked.size < UserSettings.CUP_COUNT,
+                            onClick = {
+                                picked = if (selected) picked - size else picked + size
+                                if (picked.size == UserSettings.CUP_COUNT) onCupSizes(picked.toList())
+                            },
+                            label = { Text(Volume.format(size)) },
                         )
                     }
                 }
                 Text(
-                    text = "This size becomes the first water button on the lock-screen card.",
+                    text = if (picked.size == UserSettings.CUP_COUNT) {
+                        "These three sizes are the water buttons on the Today screen and the lock-screen card."
+                    } else {
+                        "Pick ${UserSettings.CUP_COUNT - picked.size} more to save."
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

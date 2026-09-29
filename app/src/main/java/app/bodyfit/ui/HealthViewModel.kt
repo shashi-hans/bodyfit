@@ -158,7 +158,7 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     fun setSmoker(value: Boolean) = viewModelScope.launch { repository.userSettings.setSmoker(value) }
     fun setSex(value: Sex) = viewModelScope.launch { repository.userSettings.setSex(value) }
     fun setWeight(value: Int) = viewModelScope.launch { repository.userSettings.setWeightKg(value) }
-    fun setDefaultCup(value: Int) = viewModelScope.launch { repository.userSettings.setDefaultCup(value) }
+    fun setCupSizes(value: List<Int>) = viewModelScope.launch { repository.userSettings.setCupSizes(value) }
 
     private val autoBackup = AutoBackupSettings(application)
 

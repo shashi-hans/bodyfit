@@ -47,9 +47,11 @@ field draws its own text once typing starts rather than the value read back from
 because a write completes after the next keystroke has arrived and a field fed by the stored
 value receives characters out of order: "Shashi" lands as "ahS".
 
-Everything that is not a goal sits behind the menu on the Today screen: About you, default
-cup size, lock screen card, how the numbers work, backup, and about. Each is a page with a
-back arrow, so no subject has two homes.
+Everything that is not a goal sits behind the menu on the Today screen: About you, cup
+sizes, lock screen card, how the numbers work, backup, and about. Each is a page with a
+back arrow, so no subject has two homes. Cup sizes holds three picks (200, 250 and 500 ml by
+default); they are the water buttons on Today and on the lock screen card, which Android caps
+at three actions.
 
 ## Exercise
 

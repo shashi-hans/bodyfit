@@ -33,7 +33,13 @@ data class UserSettings(
     val moveMinuteGoal: Int = 30,
     val weeklyStepGoal: Int = 70_000,
     val weeklyHeartPointGoal: Int = 150,
-    val defaultCupMl: Int = 250,
+    /**
+     * The three drink sizes offered as one-tap buttons, smallest first.
+     *
+     * Three because an Android notification shows at most three action buttons, and the
+     * lock-screen card and the Today screen offer the same set.
+     */
+    val cupSizesMl: List<Int> = DEFAULT_CUP_SIZES_ML,
     /** Used only by the indicative health score. Optional: the score works without them. */
     val age: Int = 30,
     val smoker: Boolean = false,
@@ -75,7 +81,23 @@ data class UserSettings(
         val MOVE_MINUTE_GOAL_RANGE = 10..180
         val HEIGHT_RANGE = 120..220
         val WEIGHT_RANGE = 30..200
-        val CUP_SIZES_ML = listOf(100, 200, 250, 300, 400, 500)
+        val CUP_SIZES_ML = listOf(100, 150, 200, 250, 300, 350, 400, 500, 750, 1_000)
+        val DEFAULT_CUP_SIZES_ML = listOf(200, 250, 500)
+        const val CUP_COUNT = 3
+        val CUP_RANGE = 50..1_000
+
+        /**
+         * Returns exactly [CUP_COUNT] distinct in-range sizes, smallest first.
+         *
+         * Out-of-range values are clamped, duplicates dropped, and missing slots filled from
+         * [DEFAULT_CUP_SIZES_ML], so a short or odd list from storage or a backup still
+         * gives three usable buttons.
+         */
+        fun normalizeCups(sizes: List<Int>): List<Int> =
+            (sizes.map { it.coerceIn(CUP_RANGE) } + DEFAULT_CUP_SIZES_ML + CUP_SIZES_ML)
+                .distinct()
+                .take(CUP_COUNT)
+                .sorted()
         val AGE_RANGE = 12..100
 
         /** Long enough for any name worth greeting, short enough not to break the header. */
@@ -98,7 +120,9 @@ class UserSettingsRepository(private val context: Context) {
         val MOVE_MINUTE_GOAL = intPreferencesKey("move_minute_goal")
         val WEEKLY_STEP_GOAL = intPreferencesKey("weekly_step_goal")
         val WEEKLY_HEART_POINT_GOAL = intPreferencesKey("weekly_heart_point_goal")
-        val DEFAULT_CUP = intPreferencesKey("default_cup_ml")
+        /** Single-cup key from before three sizes. Read once as the first size, never written. */
+        val LEGACY_DEFAULT_CUP = intPreferencesKey("default_cup_ml")
+        val CUP_SIZES = stringPreferencesKey("cup_sizes_ml")
         val TRACKER_ENABLED = booleanPreferencesKey("tracker_enabled")
         val AGE = intPreferencesKey("age")
         val SMOKER = booleanPreferencesKey("smoker")
@@ -121,7 +145,9 @@ class UserSettingsRepository(private val context: Context) {
             moveMinuteGoal = prefs[Keys.MOVE_MINUTE_GOAL] ?: defaults.moveMinuteGoal,
             weeklyStepGoal = prefs[Keys.WEEKLY_STEP_GOAL] ?: defaults.weeklyStepGoal,
             weeklyHeartPointGoal = prefs[Keys.WEEKLY_HEART_POINT_GOAL] ?: defaults.weeklyHeartPointGoal,
-            defaultCupMl = prefs[Keys.DEFAULT_CUP] ?: defaults.defaultCupMl,
+            cupSizesMl = prefs[Keys.CUP_SIZES]?.let(::parseCups)
+                ?: prefs[Keys.LEGACY_DEFAULT_CUP]?.let { UserSettings.normalizeCups(listOf(it, 500)) }
+                ?: defaults.cupSizesMl,
             trackerEnabled = prefs[Keys.TRACKER_ENABLED] ?: defaults.trackerEnabled,
             age = prefs[Keys.AGE] ?: defaults.age,
             smoker = prefs[Keys.SMOKER] ?: defaults.smoker,
@@ -165,7 +191,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.MOVE_MINUTE_GOAL] = value.moveMinuteGoal.coerceIn(UserSettings.MOVE_MINUTE_GOAL_RANGE)
             prefs[Keys.WEEKLY_STEP_GOAL] = value.weeklyStepGoal.coerceAtLeast(1)
             prefs[Keys.WEEKLY_HEART_POINT_GOAL] = value.weeklyHeartPointGoal.coerceAtLeast(1)
-            prefs[Keys.DEFAULT_CUP] = value.defaultCupMl.coerceIn(50, 1_000)
+            prefs[Keys.CUP_SIZES] = formatCups(value.cupSizesMl)
             prefs[Keys.AGE] = value.age.coerceIn(UserSettings.AGE_RANGE)
             prefs[Keys.SMOKER] = value.smoker
             prefs[Keys.SEX] = value.sex.name
@@ -237,7 +263,14 @@ class UserSettingsRepository(private val context: Context) {
 
     suspend fun setWeeklyStepGoal(value: Int) = putInt(Keys.WEEKLY_STEP_GOAL, value.coerceAtLeast(1))
     suspend fun setWeeklyHeartPointGoal(value: Int) = putInt(Keys.WEEKLY_HEART_POINT_GOAL, value.coerceAtLeast(1))
-    suspend fun setDefaultCup(value: Int) = putInt(Keys.DEFAULT_CUP, value.coerceIn(50, 1_000))
+    suspend fun setCupSizes(value: List<Int>) {
+        context.settingsStore.edit { it[Keys.CUP_SIZES] = formatCups(value) }
+    }
+
+    private fun parseCups(stored: String): List<Int> =
+        UserSettings.normalizeCups(stored.split(',').mapNotNull { it.trim().toIntOrNull() })
+
+    private fun formatCups(sizes: List<Int>): String = UserSettings.normalizeCups(sizes).joinToString(",")
 
     suspend fun setAge(value: Int) = putInt(Keys.AGE, value.coerceIn(UserSettings.AGE_RANGE))
 

@@ -187,7 +187,7 @@ fun TodayScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                listOf(settings.defaultCupMl, 500).distinct().forEach { amount ->
+                settings.cupSizesMl.forEach { amount ->
                     AssistChip(
                         onClick = { onLogWater(amount) },
                         label = { Text("💧 +$amount ml") },

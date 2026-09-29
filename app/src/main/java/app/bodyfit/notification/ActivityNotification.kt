@@ -87,10 +87,7 @@ object ActivityNotification {
                 )
             )
 
-        builder.addAction(waterAction(context, settings.defaultCupMl))
-        if (settings.defaultCupMl != 500) {
-            builder.addAction(waterAction(context, 500))
-        }
+        settings.cupSizesMl.forEach { builder.addAction(waterAction(context, it)) }
         return builder.build()
     }
 
@@ -133,7 +130,7 @@ object ActivityNotification {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Action.Builder(0, "💧 +$amountMl ml", pending).build()
+        return NotificationCompat.Action.Builder(0, "+$amountMl ml", pending).build()
     }
 
     private fun format(value: Int): String = String.format(Locale.getDefault(), "%,d", value)

@@ -77,7 +77,7 @@ import kotlinx.coroutines.launch
 /** The pages the menu opens. Not tabs: each is pushed and comes back with the arrow. */
 private enum class MenuPage(val route: String, val emoji: String, val label: String) {
     ABOUT_YOU("about-you", "🧍", "About you"),
-    CUP_SIZE("cup-size", "🥤", "Default cup size"),
+    CUP_SIZE("cup-size", "🥤", "Cup sizes"),
     LOCK_SCREEN("lock-screen", "🔒", "Lock screen card"),
     HOW_NUMBERS("how-numbers", "🧮", "How the numbers work"),
     BACKUP("backup", "💾", "Backup"),
@@ -365,7 +365,7 @@ fun BodyFitAppScreen(
                 composable(MenuPage.CUP_SIZE.route) {
                     CupSizeScreen(
                         settings = settings,
-                        onDefaultCup = viewModel::setDefaultCup,
+                        onCupSizes = viewModel::setCupSizes,
                         onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,
                     )
