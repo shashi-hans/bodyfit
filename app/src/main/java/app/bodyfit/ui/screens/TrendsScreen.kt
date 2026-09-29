@@ -54,6 +54,8 @@ import app.bodyfit.ui.components.ProgressMeter
 import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.WeeklyBarChart
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.theme.LocalViz
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -486,12 +488,11 @@ fun TrendsScreen(
                             "🛏️ Resting burn (estimated)",
                             "${Insights.restingKcalPerDay(settings).toInt()} kcal a day",
                         )
-                        Text(
-                            text = "The chart and the target above count active calories only. " +
-                                "Resting burn is what the body spends doing nothing, estimated " +
-                                "from your height, weight, age and sex.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        WellnessNote(
+                            text = "The chart and the target above count active calories " +
+                                "only. Resting burn is what the body spends doing nothing, " +
+                                "estimated from your height, weight, age and sex. " +
+                                Wellness.SHORT,
                         )
                     }
                 }

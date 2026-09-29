@@ -59,6 +59,8 @@ import app.bodyfit.sensor.skippingMet
 import app.bodyfit.ui.components.BreathingDialog
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.SettingsCard
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -142,13 +144,13 @@ fun ExerciseScreen(
         }
 
         item {
-            Text(
-                text = "A timed session adds its minutes, calories and heart points to the day. " +
-                    "Effort is assumed, not measured, so the figures are estimates. While a " +
-                    "session runs your steps are still counted but they stop earning " +
-                    "separately, which is what keeps a run from being scored twice.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            WellnessNote(
+                text = "A timed session adds its minutes, calories and heart points to the " +
+                    "day. Effort is taken from published figures for the activity, or from " +
+                    "your measured pace where GPS can supply one, so every total is an " +
+                    "estimate. While a session runs your steps are still counted but they " +
+                    "stop earning separately, which is what keeps a run from being scored " +
+                    "twice. ${Wellness.SHORT}",
             )
         }
 

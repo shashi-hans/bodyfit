@@ -323,9 +323,18 @@ the word itself is always present: colour is a second encoding, never the only o
 three status colours are kept apart from the metric hues and are never reused as a data
 series.
 
-The wellbeing score is indicative. It is not a medical assessment and not an underwriting
-decision, and the screen showing it says so. Age, sex and smoking are optional and stay on
-the device.
+Every figure the app shows is an estimate, produced on the phone from sensor readings and
+published population averages rather than measured clinically. One wording says so, held in
+`ui/components/Disclaimer.kt` and used by every screen that has to state where its numbers
+stand: the app is a wellness tool, not a medical device, and nothing in it is intended to
+diagnose, treat, cure or prevent any condition. Separate copies of that claim would drift,
+and a page saying "estimate" beside one saying "measured" tells the user the app disagrees
+with itself about its own accuracy.
+
+The full statement carries on the pages with room for it, How the numbers work and About.
+Shorter screens and dialogs carry a one-line form of the same claim. The wellbeing score
+adds that it is neither a medical assessment nor an underwriting decision. Age, sex and
+smoking are optional and stay on the device.
 
 ## Backup
 

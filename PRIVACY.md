@@ -87,9 +87,14 @@ Body Fit is not directed at children and collects nothing from anyone, including
 
 ## Health information
 
-The wellbeing score and BMI shown in the app are indicative only. They are not a medical
-assessment, not a diagnosis, and not an input to any insurance or underwriting decision.
-Consult a qualified professional about your health.
+Body Fit is a wellness tool, not a medical device. Every figure it shows, including steps,
+calories, heart points, distance, BMI and the wellbeing score, is an estimate produced on the
+phone from sensor readings and published population averages rather than measured clinically.
+Read the numbers as a guide to your own trends over time, not as a reading of your health.
+
+Nothing in the app is intended to diagnose, treat, cure or prevent any condition, and nothing
+in it is an input to any insurance or underwriting decision. Speak to a qualified clinician
+about any symptom or health decision that concerns you.
 
 ## Changes to this policy
 

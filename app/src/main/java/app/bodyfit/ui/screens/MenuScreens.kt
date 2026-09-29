@@ -40,6 +40,8 @@ import app.bodyfit.ui.components.GoalSlider
 import app.bodyfit.ui.components.InfoLine
 import app.bodyfit.ui.components.KeyValueRow
 import app.bodyfit.ui.components.SettingsCard
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 
 /**
  * The pages behind the menu on the Today screen.
@@ -335,6 +337,11 @@ fun HowNumbersWorkScreen(
                 InfoLine("🔐", "Everything is stored on this phone. No account, no server, no analytics.")
             }
         }
+
+        // The page that explains how each figure is produced is the right place for the full
+        // statement of what those figures are worth, rather than a line the user meets first
+        // on a card and has no working to read it against.
+        item { WellnessNote() }
     }
 }
 
@@ -456,5 +463,7 @@ fun AboutScreen(
                 KeyValueRow("Data", "On this phone only")
             }
         }
+
+        item { WellnessNote() }
     }
 }

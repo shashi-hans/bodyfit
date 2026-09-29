@@ -30,6 +30,8 @@ import app.bodyfit.insights.Insights
 import app.bodyfit.ui.components.ProgressMeter
 import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.theme.LocalViz
 import app.bodyfit.ui.theme.color
 import java.util.Locale
@@ -228,12 +230,10 @@ fun HealthScreen(
         }
 
         item {
-            Text(
-                text = "Indicative only. This is not a medical assessment and not an underwriting " +
-                    "decision. It is a heuristic with round numbers, useful as a nudge and nothing " +
-                    "more. Everything it uses stays on this phone.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            WellnessNote(
+                text = Wellness.NOTE + " This score in particular is a heuristic built from " +
+                    "round numbers: it is neither a medical assessment nor an underwriting " +
+                    "decision. Everything it uses stays on this phone.",
             )
         }
 

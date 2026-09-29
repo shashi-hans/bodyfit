@@ -28,6 +28,8 @@ import app.bodyfit.ui.components.GoalSlider
 import app.bodyfit.ui.components.RecommendationRow
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.SettingsCard
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.components.thousands
 
 /**
@@ -207,12 +209,11 @@ private fun RecommendationDialog(
                     settings.moveMinuteGoal == r.moveMinuteGoal,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "From your age, weight and sex. Steps drop with age; heart points and " +
-                        "move minutes come from the WHO's 150 moderate minutes a week; water is " +
-                        "35 ml per kg. General guidance, not medical advice.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                WellnessNote(
+                    text = "From your age, weight and sex. Steps drop with age; heart points " +
+                        "and move minutes come from the WHO's 150 moderate minutes a week; " +
+                        "water is 35 ml per kg. ${Wellness.SHORT} These are general targets " +
+                        "for a body of your build, not advice for you, and not a prescription.",
                 )
             }
         },
