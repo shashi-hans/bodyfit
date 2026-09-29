@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.bodyfit.data.DailyRecord
+import app.bodyfit.data.ExerciseSession
+import app.bodyfit.data.ExerciseType
 import app.bodyfit.data.Dates
 import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.UserSettings
@@ -47,6 +49,7 @@ import app.bodyfit.data.WaterEntry
 import app.bodyfit.insights.Insights
 import app.bodyfit.ui.Metric
 import app.bodyfit.ui.components.Glyph
+import app.bodyfit.ui.components.KeyValueRow
 import app.bodyfit.ui.components.ProgressMeter
 import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
@@ -83,6 +86,8 @@ fun TrendsScreen(
     hours: List<HourlyRecord>,
     /** Drinks logged on that same day, the source of the water bars. */
     hourlyWater: List<WaterEntry>,
+    /** Exercise logged on that same day, listed under the chart. */
+    hourlySessions: List<ExerciseSession>,
     /** Called with the day whose hours are needed, or null when none are. */
     onSelectDay: (String?) -> Unit,
     contentPadding: PaddingValues,
@@ -365,6 +370,41 @@ fun TrendsScreen(
                                 "Nothing recorded for this day yet. Bars fill in as the tracker " +
                                     "counts each hour."
                             },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Sessions earn minutes, calories and heart points that no step produced, so a day
+        // with exercise on it has bars the step count cannot explain. Listing what was
+        // logged is what makes those bars readable.
+        if (hourlySessions.isNotEmpty()) {
+            item {
+                SectionCard(corner = 24.dp) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "🏋️  Exercise logged",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        hourlySessions.forEach { session ->
+                            val type = ExerciseType.from(session.type)
+                            KeyValueRow(
+                                label = "${type?.emoji ?: "🏃"}  ${type?.label ?: session.type}" +
+                                    " · ${Dates.hourLabel(Dates.hourOf(session.startedAt))}",
+                                value = "${clock(session.seconds)} · " +
+                                    "${session.kcal.toInt()} kcal · ${session.heartPoints} pts",
+                            )
+                        }
+                        Text(
+                            text = "Counted in the hour each session started, so these are " +
+                                "already inside the bars above.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -86,6 +86,16 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         .flatMapLatest { repository.observeSessions(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Exercise logged on whichever day the trends screen is showing in detail.
+     *
+     * Keyed on the same date as [hourlyWater], so a day opened from a Week or Month bar
+     * brings its sessions with it rather than showing today's against someone else's hours.
+     */
+    val hourlySessions: StateFlow<List<ExerciseSession>> = hourlyDate
+        .flatMapLatest { date -> date?.let { repository.observeSessions(it) } ?: flowOf(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun startExercise() = viewModelScope.launch { repository.startSession() }
 
     fun stopExercise(
@@ -93,8 +103,9 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         startedAt: Long,
         seconds: Int,
         measuredMet: Double? = null,
+        metres: Double = 0.0,
     ) = viewModelScope.launch {
-        repository.stopSession(type, startedAt, seconds, measuredMet)
+        repository.stopSession(type, startedAt, seconds, measuredMet, metres)
     }
 
     fun deleteExercise(session: ExerciseSession) = viewModelScope.launch {

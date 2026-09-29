@@ -18,7 +18,7 @@ import org.json.JSONObject
  */
 object Backup {
 
-    const val FORMAT_VERSION = 2
+    const val FORMAT_VERSION = 3
     const val MIME_TYPE = "application/json"
 
     fun suggestedFileName(today: String = Dates.today()): String = "bodyfit-backup-$today.json"
@@ -35,6 +35,7 @@ object Backup {
         days: List<DailyRecord>,
         hours: List<HourlyRecord>,
         water: List<WaterEntry>,
+        sessions: List<ExerciseSession>,
         settings: UserSettings,
     ): String {
         val root = JSONObject()
@@ -111,6 +112,29 @@ object Backup {
             },
         )
 
+        // Sessions are carried as well as the day totals they were folded into, because a
+        // calorie figure with no explanation is not checkable: a restored day showing 300
+        // kcal should still be able to name the ride that caused it. They are not re-folded
+        // on restore, since the day rows in the file already include them.
+        root.put(
+            "sessions",
+            JSONArray().apply {
+                sessions.forEach { session ->
+                    put(
+                        JSONObject().apply {
+                            put("date", session.date)
+                            put("type", session.type)
+                            put("startedAt", session.startedAt)
+                            put("seconds", session.seconds)
+                            put("kcal", session.kcal)
+                            put("heartPoints", session.heartPoints)
+                            put("metres", session.metres)
+                        },
+                    )
+                }
+            },
+        )
+
         return root.toString(2)
     }
 
@@ -127,6 +151,7 @@ object Backup {
         val days: List<DailyRecord>,
         val hours: List<HourlyRecord>,
         val water: List<WaterEntry>,
+        val sessions: List<ExerciseSession>,
         val settings: UserSettings,
     )
 
@@ -219,7 +244,33 @@ object Backup {
             WaterEntry(date = date, amountMl = amount, loggedAt = row.optLong("loggedAt"))
         }
 
-        return Snapshot(days = days, hours = hours, water = water, settings = settings)
+        // Absent from a version 1 or 2 file, which restores its days and simply has no
+        // sessions behind them to explain the figures.
+        val sessionsJson = root.optJSONArray("sessions") ?: JSONArray()
+        val sessions = (0 until sessionsJson.length()).mapNotNull { index ->
+            val row = sessionsJson.optJSONObject(index) ?: return@mapNotNull null
+            val date = row.optString("date").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val type = row.optString("type").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            ExerciseSession(
+                date = date,
+                // Stored as the enum name, so a type from a future build is kept as text
+                // and drawn with a fallback emoji rather than dropping the session.
+                type = type,
+                startedAt = row.optLong("startedAt"),
+                seconds = row.optInt("seconds"),
+                kcal = row.optDouble("kcal", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+                heartPoints = row.optInt("heartPoints"),
+                metres = row.optDouble("metres", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+            )
+        }
+
+        return Snapshot(
+            days = days,
+            hours = hours,
+            water = water,
+            sessions = sessions,
+            settings = settings,
+        )
     }
 
     /** Reads a file the user picked. Throws whatever the content resolver throws. */

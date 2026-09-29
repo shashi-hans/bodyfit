@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [DailyRecord::class, HourlyRecord::class, WaterEntry::class, ExerciseSession::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class HealthDatabase : RoomDatabase() {
@@ -75,6 +75,16 @@ abstract class HealthDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the distance a session covered. Sessions logged before this keep a 0, which
+         * the list reads as "not measured" and prints nothing for.
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE exercise_session ADD COLUMN metres REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
         @Volatile
         private var instance: HealthDatabase? = null
 
@@ -83,7 +93,8 @@ abstract class HealthDatabase : RoomDatabase() {
                 context.applicationContext,
                 HealthDatabase::class.java,
                 NAME,
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .build().also { instance = it }
         }
     }
 }

@@ -67,4 +67,12 @@ data class ExerciseSession(
     val seconds: Int,
     val kcal: Double,
     val heartPoints: Int,
+    /**
+     * Ground covered, from GPS. 0 where it was not measured, which is skipping, a phone
+     * with no receiver, and a refused permission.
+     *
+     * Distance only. The fixes it was summed from are consumed and dropped, so this says
+     * how far and, with [seconds], how fast, and never where.
+     */
+    val metres: Double = 0.0,
 )

@@ -56,6 +56,7 @@ class HealthRepository(context: Context) {
         days = allDays(),
         hours = dao.allHoursOnce(),
         water = dao.allWaterEntries(),
+        sessions = dao.allSessionsOnce(),
         settings = currentSettings(),
     )
 
@@ -65,12 +66,13 @@ class HealthRepository(context: Context) {
      * Returns the number of days restored. Throws [IllegalArgumentException] with a message
      * worth showing the user when the file is not a backup this build can read.
      *
-     * A version 1 file carries no hourly rows. Restoring one leaves its days without a
-     * breakdown, which the trends screen already draws as an empty day rather than a gap.
+     * A version 1 file carries no hourly rows and a version 2 file no sessions. Restoring
+     * either leaves its days without that detail, which the trends screen already draws as
+     * an empty day rather than a gap.
      */
     suspend fun restoreJson(json: String): Int {
         val snapshot = Backup.fromJson(json, currentSettings())
-        dao.restore(snapshot.days, snapshot.hours, snapshot.water)
+        dao.restore(snapshot.days, snapshot.hours, snapshot.water, snapshot.sessions)
         userSettings.replace(snapshot.settings)
         return snapshot.days.size
     }
@@ -122,7 +124,8 @@ class HealthRepository(context: Context) {
      *
      * [seconds] is time spent moving, not wall-clock time: a session paused at a traffic
      * light is not billed for standing there. [measuredMet] replaces the activity's assumed
-     * effort where the accelerometer could measure it, which today means skipping.
+     * effort where it could be measured: jump rate for skipping, GPS speed for running and
+     * cycling. [metres] is the ground GPS saw covered, 0 where nothing measured it.
      *
      * A session under [MIN_SESSION_SECONDS] is discarded: it is a mis-tap, and logging a
      * four-second run would put a stray row in the list and a rounding error in the totals.
@@ -133,6 +136,7 @@ class HealthRepository(context: Context) {
         startedAt: Long,
         seconds: Int,
         measuredMet: Double? = null,
+        metres: Double = 0.0,
     ): ExerciseSession? {
         trackerState.setSessionStartedAt(0L)
         if (seconds < MIN_SESSION_SECONDS) return null
@@ -145,6 +149,7 @@ class HealthRepository(context: Context) {
             seconds = seconds,
             kcal = type.kcal(minutes, weight, measuredMet),
             heartPoints = type.heartPoints(minutes, measuredMet),
+            metres = metres,
         )
         dao.addSession(session, moveMinutes = minutes.toInt())
         return session

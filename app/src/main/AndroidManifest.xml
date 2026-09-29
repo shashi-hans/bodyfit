@@ -3,7 +3,12 @@
 
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <!-- Used only while a running or cycling session is open, to measure speed. No
-         coordinate is stored, and a refusal falls back to an assumed effort. -->
+         coordinate is stored, and a refusal falls back to an assumed effort.
+         Coarse is declared alongside fine because Android 12 and later offer the user a
+         Precise/Approximate choice: asking for fine alone leaves the approximate answer
+         granting nothing, so a user who picks it gets neither speed nor an explanation.
+         Speed still needs fine, so approximate falls back to the assumed effort. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

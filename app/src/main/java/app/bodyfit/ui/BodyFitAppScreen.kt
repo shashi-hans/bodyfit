@@ -125,6 +125,7 @@ fun BodyFitAppScreen(
     val waterEntries by viewModel.waterEntries.collectAsState()
     val hourly by viewModel.hourly.collectAsState()
     val hourlyWater by viewModel.hourlyWater.collectAsState()
+    val hourlySessions by viewModel.hourlySessions.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val autoBackupTarget by viewModel.autoBackupTarget.collectAsState()
     val autoBackupLastRun by viewModel.autoBackupLastRun.collectAsState()
@@ -300,6 +301,7 @@ fun BodyFitAppScreen(
                         activeDate = activeDate,
                         hours = hourly,
                         hourlyWater = hourlyWater,
+                        hourlySessions = hourlySessions,
                         onSelectDay = viewModel::showHoursFor,
                         contentPadding = contentPadding,
                     )
@@ -381,7 +383,9 @@ fun BodyFitAppScreen(
                     ExerciseScreen(
                         sessions = sessions,
                         onStart = { viewModel.startExercise() },
-                        onStop = { type, startedAt, seconds, met -> viewModel.stopExercise(type, startedAt, seconds, met) },
+                        onStop = { type, startedAt, seconds, met, metres ->
+                            viewModel.stopExercise(type, startedAt, seconds, met, metres)
+                        },
                         onDelete = viewModel::deleteExercise,
                         contentPadding = contentPadding,
                     )

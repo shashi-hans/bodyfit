@@ -14,7 +14,7 @@ network client and no analytics in the app.
 | 🏠 Today | App name and greeting across the top, then the day's figures on the left beside their icons, each printed in its own colour, with three nested rings on the right, then water beside its add buttons, a box holding distance and move minutes, and a second holding BMI and wellbeing that opens their working |
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 🏋️ Exercise | Box breathing, running, cycling and skipping, and today's logged sessions |
-| 📈 Trends | One metric at a time over Day, Week or Month. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Arrows step back and forward a span at a time, back only as far as there is data. Tapping a bar in Week or Month opens that day hour by hour |
+| 📈 Trends | One metric at a time over Day, Week or Month, with the day's logged exercise under the chart. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Arrows step back and forward a span at a time, back only as far as there is data. Tapping a bar in Week or Month opens that day hour by hour |
 | 🎯 Goals | Daily goals for steps, calories, water, heart points and move minutes, a Recommendation button opening the suggested set, and weekly targets |
 
 BMI and wellbeing open a page of their own from the Today screen, showing the score, the
@@ -31,9 +31,17 @@ Box breathing, running, cycling and skipping, reached from a button on Today. Br
 a guided minute that records nothing. The other three run a timer and log a session.
 
 A saved session writes an `exercise_session` row and folds its minutes, calories and heart
-points into the day, so the Today goals count exercise the step sensor cannot see. Sessions
-are kept as rows as well as folded in because a calorie figure with no explanation is not
-checkable: a user who sees 300 kcal appear should be able to find the ride that caused it.
+points into the day and into the hour it started, so the Today goals count exercise the step
+sensor cannot see and the Day trend draws the run in the hour it happened. Without the hourly
+half the day total and the 24 bars under it would add up to different numbers. The whole
+session is billed to its starting hour rather than split across the hours it spanned: a
+session is minutes, not hours, and splitting it would invent a precision the row does not
+carry. Trends lists the day's sessions under the chart, so a bar no step count can explain
+is readable.
+
+Sessions are kept as rows as well as folded in because a calorie figure with no explanation
+is not checkable: a user who sees 300 kcal appear should be able to find the ride that
+caused it.
 Removing a session takes its contribution back off the day.
 
 | Activity | Produces steps | Effort |
@@ -60,7 +68,10 @@ which is in force.
 
 No coordinate is stored. Fixes are consumed for distance and dropped, and the session row
 holds duration, distance and calories: how far and how fast, never where. A route trace is
-a different category of data from a step count, and the app does not hold one.
+a different category of data from a step count, and the app does not hold one. Pace is
+derived from the stored distance and moving time rather than stored itself, so the two
+cannot disagree. A session that measured nothing carries 0 metres, and its row prints no
+distance at all rather than a misleading zero.
 
 Fixes worse than 35 m of accuracy are ignored, and a hop implying more than 80 km/h is
 treated as two bad fixes rather than a sprint. Location is requested when a running or
@@ -379,8 +390,20 @@ re-asserted on every launch, because an app update or a force stop can drop the 
 and a weekly backup that quietly stopped is worse than one that never existed. A revoked
 or deleted file is recorded and shown on the page rather than retried forever.
 
-`format` is 2. A version 1 file still restores; it simply carries no hourly rows, and the
-Day trend draws those days as empty. A file written by a newer format is refused outright
+`format` is 3. Older files still restore: a version 1 file carries no hourly rows and a
+version 2 file no exercise sessions, and the screens draw the missing detail as empty rather
+than as a gap.
+
+Sessions are carried as well as the day totals they were folded into, because a calorie
+figure with no explanation is not checkable: a restored day showing 300 kcal should still be
+able to name the ride that caused it. They are written back as rows only and never re-folded
+into the day, since the day rows in the file already include them and folding again would
+count every session twice.
+
+A restore is also the second way through first-run setup. A backup carries the same height,
+weight, age and sex the setup screen asks for, so a user moving from another phone answers
+the questions by restoring rather than typing them again and hoping they match what the file
+is about to overwrite. Only a restore that actually parsed opens the app. A file written by a newer format is refused outright
 rather than half read.
 
 ## The current day

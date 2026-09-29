@@ -25,8 +25,20 @@ class BackupTest {
         WaterEntry(2, "2026-09-08", 250, 1_788_800_100_000),
     )
     private val settings = UserSettings(heightCm = 179, weightKg = 75, age = 34, sex = Sex.MALE)
+    private val sessions = listOf(
+        ExerciseSession(
+            id = 1,
+            date = "2026-09-08",
+            type = "RUNNING",
+            startedAt = 1_788_800_200_000,
+            seconds = 1_500,
+            kcal = 210.5,
+            heartPoints = 50,
+            metres = 4_200.0,
+        ),
+    )
 
-    private fun parsed() = JSONObject(Backup.toJson(days, hours, water, settings))
+    private fun parsed() = JSONObject(Backup.toJson(days, hours, water, sessions, settings))
 
     @Test
     fun `every day survives the round trip with all its fields`() {
@@ -72,14 +84,33 @@ class BackupTest {
 
     @Test
     fun `an empty history still produces a valid file rather than failing`() {
-        val root = JSONObject(Backup.toJson(emptyList(), emptyList(), emptyList(), UserSettings()))
+        val root = JSONObject(Backup.toJson(emptyList(), emptyList(), emptyList(), emptyList(), UserSettings()))
         assertEquals(0, root.getJSONArray("days").length())
         assertEquals(0, root.getJSONArray("hours").length())
         assertEquals(0, root.getJSONArray("waterEntries").length())
+        assertEquals(0, root.getJSONArray("sessions").length())
     }
 
     @Test
     fun `the suggested name is dated so successive exports do not overwrite`() {
         assertEquals("bodyfit-backup-2026-09-08.json", Backup.suggestedFileName("2026-09-08"))
+    }
+
+    @Test
+    fun `a session survives the round trip with its distance`() {
+        val out = Backup.fromJson(parsed().toString(), UserSettings()).sessions
+        assertEquals(1, out.size)
+        val session = out.first()
+        assertEquals("RUNNING", session.type)
+        assertEquals(1_500, session.seconds)
+        assertEquals(50, session.heartPoints)
+        assertEquals(4_200.0, session.metres, 0.001)
+        assertEquals(210.5, session.kcal, 0.001)
+    }
+
+    @Test
+    fun `a file written before sessions existed restores without them`() {
+        val older = parsed().apply { remove("sessions") }.toString()
+        assertEquals(emptyList<ExerciseSession>(), Backup.fromJson(older, UserSettings()).sessions)
     }
 }

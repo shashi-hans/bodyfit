@@ -24,6 +24,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import android.Manifest
+import android.annotation.SuppressLint
 import android.location.LocationListener
 import android.location.LocationManager
 import android.hardware.Sensor
@@ -72,7 +73,7 @@ import java.util.Locale
 fun ExerciseScreen(
     sessions: List<ExerciseSession>,
     onStart: (ExerciseType) -> Unit,
-    onStop: (ExerciseType, Long, Int, Double?) -> Unit,
+    onStop: (ExerciseType, Long, Int, Double?, Double) -> Unit,
     onDelete: (ExerciseSession) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
@@ -86,7 +87,7 @@ fun ExerciseScreen(
     // the prompt appears. A refusal starts the session anyway, on an assumed effort: the
     // session is the point, and the measurement is the improvement.
     val locationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
         pendingLocation?.let { type ->
             running = type
@@ -124,7 +125,12 @@ fun ExerciseScreen(
                                 !Permissions.hasLocation(context)
                             ) {
                                 pendingLocation = type
-                                locationLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                locationLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                                    )
+                                )
                             } else {
                                 running = type
                                 onStart(type)
@@ -174,8 +180,8 @@ fun ExerciseScreen(
     running?.let { type ->
         TimerDialog(
             type = type,
-            onDone = { startedAt, seconds, measuredMet ->
-                onStop(type, startedAt, seconds, measuredMet)
+            onDone = { startedAt, seconds, measuredMet, metres ->
+                onStop(type, startedAt, seconds, measuredMet, metres)
                 running = null
             },
         )
@@ -239,6 +245,15 @@ private fun SessionRow(session: ExerciseSession, onDelete: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Absent rather than zero when nothing measured it: "0.00 km" beside a
+                // skipping session would read as a failed measurement, not as no attempt.
+                if (session.metres > 0.0) {
+                    Text(
+                        text = distanceLine(session.metres, session.seconds),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             IconButton(onClick = onDelete) {
                 Icon(
@@ -252,6 +267,24 @@ private fun SessionRow(session: ExerciseSession, onDelete: () -> Unit) {
 }
 
 /**
+ * How far the session went, and the pace that implies.
+ *
+ * Pace comes from the stored distance and moving time rather than being stored itself, so
+ * the two can never disagree. Below a kilometre the figure is metres: "0.26 km" is harder
+ * to read than "260 m" and pretends to a precision GPS does not have at that range.
+ */
+private fun distanceLine(metres: Double, seconds: Int): String {
+    val distance = if (metres >= 1000.0) {
+        String.format(Locale.getDefault(), "%.2f km", metres / 1000.0)
+    } else {
+        String.format(Locale.getDefault(), "%.0f m", metres)
+    }
+    if (seconds <= 0) return distance
+    val kmh = metres / seconds * 3.6
+    return "$distance · ${String.format(Locale.getDefault(), "%.1f", kmh)} km/h"
+}
+
+/**
  * The running clock for one exercise, paused whenever the phone stops moving.
  *
  * Elapsed time is accumulated from wall-clock deltas while movement is happening, rather
@@ -261,8 +294,13 @@ private fun SessionRow(session: ExerciseSession, onDelete: () -> Unit) {
  * For skipping the same signal counts jumps, and the rate replaces the assumed effort with
  * a measured one.
  */
+// The location call below is guarded by Permissions.hasLocation and wrapped in runCatching,
+// but lint only recognises a checkSelfPermission written inline at the call site. Inlining
+// it would put a second copy of that rule outside Permissions, where every other check in
+// the app lives, so the check stays where it belongs and lint is told here.
+@SuppressLint("MissingPermission")
 @Composable
-private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?) -> Unit) {
+private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?, Double) -> Unit) {
     val context = LocalContext.current
     val startedAt = remember { System.currentTimeMillis() }
     val monitor = remember(type) { SessionMonitor(countJumps = type == ExerciseType.SKIPPING) }
@@ -316,13 +354,18 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?) -> Unit
                 accuracyMetres = if (location.hasAccuracy()) location.accuracy else Float.MAX_VALUE,
             )
         }
+        // Checked again here, not only in `canMeasure` above: that was read when the dialog
+        // opened, and the permission can be taken away between then and now from the
+        // notification shade. The call throws if it is, so the check is not decoration.
         runCatching {
-            manager?.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                FIX_INTERVAL_MS,
-                FIX_DISTANCE_M,
-                listener,
-            )
+            if (Permissions.hasLocation(context)) {
+                manager?.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    FIX_INTERVAL_MS,
+                    FIX_DISTANCE_M,
+                    listener,
+                )
+            }
         }
         onDispose { runCatching { manager?.removeUpdates(listener) } }
     }
@@ -434,10 +477,10 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?) -> Unit
             }
         },
         confirmButton = {
-            Button(onClick = { onDone(startedAt, seconds, measuredMet) }) { Text("Stop and save") }
+            Button(onClick = { onDone(startedAt, seconds, measuredMet, metres) }) { Text("Stop and save") }
         },
         dismissButton = {
-            OutlinedButton(onClick = { onDone(startedAt, 0, null) }) { Text("Discard") }
+            OutlinedButton(onClick = { onDone(startedAt, 0, null, 0.0) }) { Text("Discard") }
         },
     )
 }
@@ -459,8 +502,8 @@ private const val FIX_DISTANCE_M = 0f
 /** Below this the phone is still finding itself, not covering ground. */
 private const val MIN_MEASURED_METRES = 50.0
 
-/** Seconds as m:ss, or h:mm:ss once an exercise runs past the hour. */
-private fun clock(seconds: Int): String {
+/** Seconds as m:ss, or h:mm:ss once an exercise runs past the hour. Shared with Today. */
+internal fun clock(seconds: Int): String {
     val hours = seconds / 3600
     val minutes = (seconds % 3600) / 60
     val secs = seconds % 60
