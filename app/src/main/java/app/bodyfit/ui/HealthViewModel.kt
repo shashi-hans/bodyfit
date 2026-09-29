@@ -151,6 +151,8 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         repository.userSettings.setWeeklyHeartPointGoal(value)
     }
 
+    fun setName(value: String) = viewModelScope.launch { repository.userSettings.setName(value) }
+
     fun setHeight(value: Int) = viewModelScope.launch { repository.userSettings.setHeightCm(value) }
     fun setAge(value: Int) = viewModelScope.launch { repository.userSettings.setAge(value) }
     fun setSmoker(value: Boolean) = viewModelScope.launch { repository.userSettings.setSmoker(value) }

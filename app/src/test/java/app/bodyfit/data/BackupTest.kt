@@ -24,7 +24,6 @@ class BackupTest {
         WaterEntry(1, "2026-09-08", 500, 1_788_800_000_000),
         WaterEntry(2, "2026-09-08", 250, 1_788_800_100_000),
     )
-    private val settings = UserSettings(heightCm = 179, weightKg = 75, age = 34, sex = Sex.MALE)
     private val sessions = listOf(
         ExerciseSession(
             id = 1,
@@ -36,6 +35,13 @@ class BackupTest {
             heartPoints = 50,
             metres = 4_200.0,
         ),
+    )
+    private val settings = UserSettings(
+        name = "Sam",
+        heightCm = 179,
+        weightKg = 75,
+        age = 34,
+        sex = Sex.MALE,
     )
 
     private fun parsed() = JSONObject(Backup.toJson(days, hours, water, sessions, settings))
@@ -106,6 +112,11 @@ class BackupTest {
         assertEquals(50, session.heartPoints)
         assertEquals(4_200.0, session.metres, 0.001)
         assertEquals(210.5, session.kcal, 0.001)
+    }
+
+    @Test
+    fun `the name survives the round trip`() {
+        assertEquals("Sam", Backup.fromJson(parsed().toString(), UserSettings()).settings.name)
     }
 
     @Test

@@ -21,6 +21,8 @@ Body Fit stores the following on your device:
 - **Height, weight, age, sex and whether you smoke**, if you enter them. These are optional
   and are used only to calculate BMI, stride length, calorie estimates and the indicative
   wellbeing score.
+- **Your name**, if you enter one. It is optional, is used only to greet you on the Today
+  screen, and is never part of any calculation. Leaving it blank changes nothing else.
 - **Your goals and app settings.**
 
 ## Where it is stored

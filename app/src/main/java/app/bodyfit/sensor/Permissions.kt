@@ -2,11 +2,13 @@ package app.bodyfit.sensor
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.os.Build
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 /**
@@ -79,6 +81,26 @@ object Permissions {
         ) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    /**
+     * Whether Android will still show the system prompt for activity recognition.
+     *
+     * After a second refusal, or a "don't ask again", launching the request does nothing
+     * at all: no dialog, no callback the user can see. The only way back is the app's own
+     * settings page, so the screen has to know which of the two it is offering.
+     *
+     * [android.app.Activity.shouldShowRequestPermissionRationale] is also false before the
+     * very first request, which would read as a permanent refusal. It never is here: the
+     * first-run setup asks before any screen can show this.
+     */
+    fun activityRecognitionRefusedForGood(activity: Activity): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        if (granted(activity, Manifest.permission.ACTIVITY_RECOGNITION)) return false
+        return !ActivityCompat.shouldShowRequestPermissionRationale(
+            activity,
+            Manifest.permission.ACTIVITY_RECOGNITION,
+        )
     }
 
     private fun granted(context: Context, permission: String): Boolean =

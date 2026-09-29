@@ -21,6 +21,32 @@ BMI and wellbeing open a page of their own from the Today screen, showing the sc
 band and the arithmetic line by line. It explains two standings rather than reporting the
 day, so it is read occasionally and does not hold a place in the bar.
 
+## First run
+
+A fresh install opens on a setup screen rather than on the app, and the tracker does not
+start until it is answered. Every figure the app reports is scaled by height or weight, so
+opening straight into the tabs would show a full screen of numbers computed from untouched
+defaults: they look like measurements of the user while being measurements of nobody.
+
+Each measurement has to be moved before the button enables. A slider already sitting on a
+plausible default cannot tell "this is my height" apart from "I did not read this screen".
+Sex has no preselected chip for the same reason: "Prefer not to say" is an answer the user
+picks, not a value they fail to change. The name is the one optional field, because nothing
+is calculated from it.
+
+The permission prompt waits for the answers too. Asking to read the step counter over a
+screen that has not yet said why the app wants it is how a refusal is earned.
+
+An install that predates this screen is not walled behind it. The flag is absent there, so
+it falls back to whether a body measurement was ever written, which an existing user has
+done through About you.
+
+About you holds a name alongside the body measurements. It is optional, never leaves the
+phone and is never part of a figure; the Today header greets "Hi, Guest" without one. The
+field draws its own text once typing starts rather than the value read back from DataStore,
+because a write completes after the next keystroke has arrived and a field fed by the stored
+value receives characters out of order: "Shashi" lands as "ahS".
+
 Everything that is not a goal sits behind the menu on the Today screen: About you, default
 cup size, lock screen card, how the numbers work, backup, and about. Each is a page with a
 back arrow, so no subject has two homes.

@@ -1,5 +1,11 @@
 package app.bodyfit.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -19,25 +26,29 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -46,19 +57,18 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import app.bodyfit.R
 import app.bodyfit.data.Backup
+import app.bodyfit.sensor.Permissions
 import app.bodyfit.ui.screens.AboutScreen
 import app.bodyfit.ui.screens.AboutYouScreen
 import app.bodyfit.ui.screens.BackupScreen
 import app.bodyfit.ui.screens.CupSizeScreen
 import app.bodyfit.ui.screens.ExerciseScreen
 import app.bodyfit.ui.screens.GoalsScreen
+import app.bodyfit.ui.screens.HealthScreen
 import app.bodyfit.ui.screens.HowNumbersWorkScreen
 import app.bodyfit.ui.screens.LockScreenCardScreen
-import app.bodyfit.ui.screens.HealthScreen
 import app.bodyfit.ui.screens.TodayScreen
 import app.bodyfit.ui.screens.TrendsScreen
 import app.bodyfit.ui.screens.WaterScreen
@@ -98,16 +108,25 @@ private enum class Tab(val route: String, val emoji: String, val label: String) 
 @Composable
 fun BodyFitAppScreen(
     activityPermissionGranted: Boolean,
+    /** False until the system prompt has been shown once and answered. */
+    permissionsAnswered: Boolean = true,
     onRequestPermissions: () -> Unit,
     viewModel: HealthViewModel = viewModel(),
 ) {
     // Re-anchors the screens on the current day when the app comes back to the front. The
     // view model also wakes itself at midnight; this covers the case of the app being
     // backgrounded across the boundary and brought back.
+    // Put back on every return to the app, so switching the permission off in Settings and
+    // coming back is met with the warning rather than with a screen of zeros.
+    var permissionNoticeSeen by rememberSaveable { mutableStateOf(false) }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.onResumed()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onResumed()
+                permissionNoticeSeen = false
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -332,6 +351,7 @@ fun BodyFitAppScreen(
                 composable(MenuPage.ABOUT_YOU.route) {
                     AboutYouScreen(
                         settings = settings,
+                        onName = viewModel::setName,
                         onHeight = viewModel::setHeight,
                         onWeight = viewModel::setWeight,
                         onAge = viewModel::setAge,
@@ -400,6 +420,84 @@ fun BodyFitAppScreen(
         }
     }
     }
+
+    if (!activityPermissionGranted && permissionsAnswered && !permissionNoticeSeen) {
+        val activity = context as? Activity
+        PermissionRequiredDialog(
+            refusedForGood = activity?.let(Permissions::activityRecognitionRefusedForGood) == true,
+            onAllow = {
+                permissionNoticeSeen = true
+                onRequestPermissions()
+            },
+            onOpenSettings = {
+                permissionNoticeSeen = true
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null),
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            },
+            onDismiss = { permissionNoticeSeen = true },
+        )
+    }
+}
+
+/**
+ * Said outright, the first time the app is opened without the permission it runs on.
+ *
+ * Android will not hand over the step counter without activity recognition, so with it off
+ * the app records nothing at all: not steps, not calories, not a single minute. A banner
+ * further down the screen is the wrong weight for that. The banner stays underneath for the
+ * times this has been dismissed.
+ *
+ * Two refusals, or a "don't ask again", and the system prompt stops appearing altogether.
+ * The button then opens the app's settings page instead, because offering "Allow" that does
+ * nothing visible is worse than offering nothing.
+ */
+@Composable
+private fun PermissionRequiredDialog(
+    refusedForGood: Boolean,
+    onAllow: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("⚠️  Nothing is being counted") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Body Fit works out every number it shows from the phone's step " +
+                        "sensor, and Android will not let it read that sensor without " +
+                        "physical activity access.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "While this is off nothing is recorded. Steps, calories, heart " +
+                        "points and move minutes all stay at zero, and the days behind them " +
+                        "stay empty.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (refusedForGood) {
+                    Text(
+                        text = "Android has stopped showing the prompt for this app, so the " +
+                            "switch has to be turned on in Settings.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = if (refusedForGood) onOpenSettings else onAllow) {
+                Text(if (refusedForGood) "Open settings" else "Allow")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } },
+    )
 }
 
 @Composable

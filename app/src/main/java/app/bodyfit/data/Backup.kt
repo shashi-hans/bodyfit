@@ -45,6 +45,7 @@ object Backup {
         root.put(
             "settings",
             JSONObject().apply {
+                put("name", settings.name)
                 put("heightCm", settings.heightCm)
                 put("weightKg", settings.weightKg)
                 put("age", settings.age)
@@ -183,6 +184,9 @@ object Backup {
             current
         } else {
             current.copy(
+                // Absent in a file written before the name existed, which reads as the
+                // name already on the phone rather than as an instruction to clear it.
+                name = settingsJson.optString("name", current.name),
                 heightCm = settingsJson.optInt("heightCm", current.heightCm),
                 weightKg = settingsJson.optInt("weightKg", current.weightKg),
                 age = settingsJson.optInt("age", current.age),

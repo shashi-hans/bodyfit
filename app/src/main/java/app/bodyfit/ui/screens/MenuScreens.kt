@@ -1,5 +1,9 @@
 package app.bodyfit.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -18,21 +23,24 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import android.content.Intent
-import android.os.PowerManager
-import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import app.bodyfit.BuildConfig
 import app.bodyfit.R
-import android.net.Uri
 import app.bodyfit.data.Dates
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
@@ -95,6 +103,7 @@ private fun MenuPage(
 @Composable
 fun AboutYouScreen(
     settings: UserSettings,
+    onName: (String) -> Unit,
     onHeight: (Int) -> Unit,
     onWeight: (Int) -> Unit,
     onAge: (Int) -> Unit,
@@ -107,6 +116,7 @@ fun AboutYouScreen(
     MenuPage("About you", onBack, contentPadding, modifier) {
         item {
             SettingsCard {
+                NameField(value = settings.name, onValue = onName)
                 GoalSlider(
                     emoji = "📏",
                     label = "Height",
@@ -171,6 +181,7 @@ fun AboutYouScreen(
                 Text(
                     text = "Distance uses your height for stride length, and calories use your " +
                         "weight. Age and sex are used only for the resting-burn estimate. " +
+                        "Your name is only used to greet you and is never part of a figure. " +
                         "All of it stays on this phone.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -178,6 +189,39 @@ fun AboutYouScreen(
             }
         }
     }
+}
+
+/**
+ * What to call the user, written as they type.
+ *
+ * No Save button: every other row on this page commits as it is changed, and a lone field
+ * that needed confirming would be the one setting a user could leave half entered. The
+ * repository trims and caps what arrives, so the field itself stays a plain box.
+ */
+@Composable
+private fun NameField(value: String, onValue: (String) -> Unit) {
+    // The field draws its own text once typing starts, rather than the stored value read
+    // back. A write to DataStore is a suspend that completes after the next keystroke has
+    // already arrived, so a field fed by the stored value receives characters out of the
+    // order they were typed: "Shashi" lands as "ahS". Null means untouched, which is what
+    // lets the saved name appear when the page opens.
+    var draft by rememberSaveable { mutableStateOf<String?>(null) }
+
+    OutlinedTextField(
+        value = draft ?: value,
+        onValueChange = {
+            draft = it
+            onValue(it)
+        },
+        label = { Text("🙂  Your name") },
+        placeholder = { Text("Optional") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.Words,
+            imeAction = ImeAction.Done,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

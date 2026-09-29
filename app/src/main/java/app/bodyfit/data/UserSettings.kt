@@ -16,6 +16,13 @@ enum class Sex { MALE, FEMALE, UNSPECIFIED }
 
 /** Goals and body measurements the user controls. Defaults follow WHO activity guidance. */
 data class UserSettings(
+    /**
+     * What to call the user on the Today screen. Blank until they type one.
+     *
+     * Never sent anywhere and never used in a calculation. It exists so the app can greet
+     * the person using it, which is why a blank one is normal rather than a gap to fill.
+     */
+    val name: String = "",
     val heightCm: Int = 170,
     val weightKg: Int = 70,
     val stepGoal: Int = 10_000,
@@ -38,6 +45,27 @@ data class UserSettings(
      * both the counting and the lock-screen card together.
      */
     val trackerEnabled: Boolean = true,
+    /**
+     * Whether the first-run setup has been answered.
+     *
+     * False on a fresh install, and the app shows the setup screen instead of itself until
+     * it is true. Every figure the app reports is scaled by height or weight, so a screen
+     * of numbers derived from untouched defaults would look like measurements of the user
+     * while being measurements of nobody.
+     *
+     * Not carried in a backup, for the same reason the tracker switch is not: it is a
+     * property of this install, and a restore happens from inside an app already set up.
+     */
+    val setupComplete: Boolean = false,
+    /**
+     * Whether the background-access step has been put in front of the user once.
+     *
+     * Separate from [setupComplete] because it is asked after the permission prompts, and
+     * because it can be skipped: the app still counts without it, just less reliably. Once
+     * seen it is never shown again, whatever was chosen. The page behind the menu is where
+     * someone who skipped goes back to it.
+     */
+    val backgroundPromptSeen: Boolean = false,
 ) {
     companion object {
         val STEP_GOAL_RANGE = 2_000..30_000
@@ -49,6 +77,9 @@ data class UserSettings(
         val WEIGHT_RANGE = 30..200
         val CUP_SIZES_ML = listOf(100, 200, 250, 300, 400, 500)
         val AGE_RANGE = 12..100
+
+        /** Long enough for any name worth greeting, short enough not to break the header. */
+        const val NAME_MAX_CHARS = 24
     }
 }
 
@@ -72,11 +103,15 @@ class UserSettingsRepository(private val context: Context) {
         val AGE = intPreferencesKey("age")
         val SMOKER = booleanPreferencesKey("smoker")
         val SEX = stringPreferencesKey("sex")
+        val NAME = stringPreferencesKey("name")
+        val SETUP_COMPLETE = booleanPreferencesKey("setup_complete")
+        val BACKGROUND_PROMPT_SEEN = booleanPreferencesKey("background_prompt_seen")
     }
 
     val settings: Flow<UserSettings> = context.settingsStore.data.map { prefs ->
         val defaults = UserSettings()
         UserSettings(
+            name = prefs[Keys.NAME] ?: defaults.name,
             heightCm = prefs[Keys.HEIGHT] ?: defaults.heightCm,
             weightKg = prefs[Keys.WEIGHT] ?: defaults.weightKg,
             stepGoal = prefs[Keys.STEP_GOAL] ?: defaults.stepGoal,
@@ -91,6 +126,21 @@ class UserSettingsRepository(private val context: Context) {
             age = prefs[Keys.AGE] ?: defaults.age,
             smoker = prefs[Keys.SMOKER] ?: defaults.smoker,
             sex = prefs[Keys.SEX]?.let { runCatching { Sex.valueOf(it) }.getOrNull() } ?: defaults.sex,
+            // Absent on an install that predates the setup screen. Such a phone has
+            // already been through About you if it ever wrote a body measurement, so it
+            // is treated as set up rather than walled behind questions it answered long
+            // ago. A genuinely fresh install has written neither key.
+            setupComplete = prefs[Keys.SETUP_COMPLETE]
+                ?: (prefs[Keys.HEIGHT] != null || prefs[Keys.WEIGHT] != null),
+            // Counted as seen only by an install that predates the setup screen: it has
+            // been running for a while and should not be walled behind a question it never
+            // had the chance to answer. A phone that has just been through setup has not
+            // seen it, and setup writes height and weight, so those cannot be the test.
+            backgroundPromptSeen = prefs[Keys.BACKGROUND_PROMPT_SEEN]
+                ?: (
+                    prefs[Keys.SETUP_COMPLETE] == null &&
+                        (prefs[Keys.HEIGHT] != null || prefs[Keys.WEIGHT] != null)
+                    ),
         )
     }
 
@@ -119,8 +169,59 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.AGE] = value.age.coerceIn(UserSettings.AGE_RANGE)
             prefs[Keys.SMOKER] = value.smoker
             prefs[Keys.SEX] = value.sex.name
+            prefs[Keys.NAME] = cleanName(value.name)
         }
     }
+
+    suspend fun setName(value: String) {
+        context.settingsStore.edit { it[Keys.NAME] = cleanName(value) }
+    }
+
+    /**
+     * Opens the app without asking the questions, for a restore that answered them.
+     *
+     * The body measurements are already written by the restore itself, so this only lifts
+     * the gate.
+     */
+    suspend fun markBackgroundPromptSeen() {
+        context.settingsStore.edit { it[Keys.BACKGROUND_PROMPT_SEEN] = true }
+    }
+
+    suspend fun markSetupComplete() {
+        context.settingsStore.edit { it[Keys.SETUP_COMPLETE] = true }
+    }
+
+    /**
+     * Writes the first-run answers and opens the app, in one edit.
+     *
+     * One edit rather than five, so a process death midway cannot leave the app unlocked
+     * with only half the body measurements it was unlocked for.
+     */
+    suspend fun completeSetup(
+        name: String,
+        heightCm: Int,
+        weightKg: Int,
+        age: Int,
+        sex: Sex,
+    ) {
+        context.settingsStore.edit { prefs ->
+            prefs[Keys.NAME] = cleanName(name)
+            prefs[Keys.HEIGHT] = heightCm.coerceIn(UserSettings.HEIGHT_RANGE)
+            prefs[Keys.WEIGHT] = weightKg.coerceIn(UserSettings.WEIGHT_RANGE)
+            prefs[Keys.AGE] = age.coerceIn(UserSettings.AGE_RANGE)
+            prefs[Keys.SEX] = sex.name
+            prefs[Keys.SETUP_COMPLETE] = true
+        }
+    }
+
+    /**
+     * Trimmed and capped, so a stray paste cannot push the greeting off the header.
+     *
+     * Line breaks become spaces rather than being stripped: a name pasted from a form may
+     * carry one, and dropping it would join two words that were never one.
+     */
+    private fun cleanName(value: String): String =
+        value.replace(Regex("\\s+"), " ").trim().take(UserSettings.NAME_MAX_CHARS)
 
     suspend fun setHeightCm(value: Int) = putInt(Keys.HEIGHT, value.coerceIn(UserSettings.HEIGHT_RANGE))
     suspend fun setWeightKg(value: Int) = putInt(Keys.WEIGHT, value.coerceIn(UserSettings.WEIGHT_RANGE))
