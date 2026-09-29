@@ -74,6 +74,8 @@ data class GaugeArc(
      * For a number whose name does not say what it counts. Most do, and carry none.
      */
     val onInfo: (() -> Unit)? = null,
+    /** Opens this metric's detail, from a tap anywhere on its figure. */
+    val onOpen: (() -> Unit)? = null,
 )
 
 /**
@@ -89,6 +91,8 @@ data class GaugeCenter(
     val color: Color,
     /** Opens an explanation of this reading, from a round button under it. */
     val onInfo: (() -> Unit)? = null,
+    /** Opens this reading's detail, from a tap on the number or its caption. */
+    val onOpen: (() -> Unit)? = null,
 )
 
 /**
@@ -189,7 +193,8 @@ fun TodayGauge(
                     // in a box whose top half is arc.
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 6.dp),
+                        .padding(bottom = 6.dp)
+                        .then(center.onOpen?.let { Modifier.clickable(onClick = it) } ?: Modifier),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     // Above the reading, not under it: the well is read top down, and a
@@ -256,7 +261,10 @@ private fun Figure(
     alignment: Alignment.Horizontal = Alignment.Start,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, horizontalAlignment = alignment) {
+    Column(
+        modifier = modifier.then(arc.onOpen?.let { Modifier.clickable(onClick = it) } ?: Modifier),
+        horizontalAlignment = alignment,
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Glyph(
                 emoji = arc.emoji,

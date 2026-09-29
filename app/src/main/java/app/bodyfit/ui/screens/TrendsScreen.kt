@@ -1,7 +1,6 @@
 package app.bodyfit.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -92,6 +93,13 @@ fun TrendsScreen(
     hourlySessions: List<ExerciseSession>,
     /** Called with the day whose hours are needed, or null when none are. */
     onSelectDay: (String?) -> Unit,
+    /**
+     * A metric to open on the Day view of today, set when another screen sends the user
+     * here. Applied once, then [onFocusHandled] clears it so a later visit keeps the
+     * user's own choice.
+     */
+    focus: Metric? = null,
+    onFocusHandled: () -> Unit = {},
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -107,6 +115,15 @@ fun TrendsScreen(
     // Changing span with an offset held would land somewhere arbitrary: four weeks back is
     // not four days back. Every change of span returns to the present.
     LaunchedEffect(window) { offset = 0 }
+
+    LaunchedEffect(focus) {
+        if (focus == null) return@LaunchedEffect
+        metric = focus
+        window = Window.DAY
+        offset = 0
+        selectedBar = null
+        onFocusHandled()
+    }
 
     val today = remember(activeDate) { Dates.parse(activeDate) }
     val anchor = remember(today, window, offset) {
@@ -258,13 +275,25 @@ fun TrendsScreen(
         }
 
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+            val chips = rememberLazyListState()
+            // Six chips run past a phone's width, so a metric chosen from another screen or
+            // restored on return can sit off the edge. Scroll only when the chip is not
+            // fully on screen, so a tap on a visible chip leaves the row where it is.
+            LaunchedEffect(metric) {
+                val index = Metric.TRENDS_ORDER.indexOf(metric)
+                val info = chips.layoutInfo
+                val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+                val fullyVisible = item != null &&
+                    item.offset >= info.viewportStartOffset &&
+                    item.offset + item.size <= info.viewportEndOffset
+                if (!fullyVisible) chips.animateScrollToItem(index)
+            }
+            LazyRow(
+                state = chips,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Metric.entries.forEach { entry ->
+                items(Metric.TRENDS_ORDER) { entry ->
                     val selected = entry == metric
                     FilterChip(
                         selected = selected,

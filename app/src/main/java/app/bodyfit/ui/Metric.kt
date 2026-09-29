@@ -159,5 +159,8 @@ enum class Metric(
          * are worth reading, the curves are not worth drawing twice.
          */
         val GAUGE_ARCS = listOf(STEPS, CALORIES, HEART_POINTS, WATER)
+
+        /** The order of the metric chips on Trends. */
+        val TRENDS_ORDER = listOf(CALORIES, STEPS, WATER, HEART_POINTS, DISTANCE, MOVE_MINUTES)
     }
 }

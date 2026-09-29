@@ -135,6 +135,8 @@ fun BodyFitAppScreen(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: Tab.TODAY.route
+    /** The metric a tap on Today asked Trends to open, until Trends has applied it. */
+    var trendsFocus by remember { mutableStateOf<Metric?>(null) }
 
     val settings by viewModel.settings.collectAsState()
     val today by viewModel.today.collectAsState()
@@ -301,6 +303,14 @@ fun BodyFitAppScreen(
                         onOpenHealth = {
                             navController.navigate(HEALTH_ROUTE) { launchSingleTop = true }
                         },
+                        onOpenTrends = { metric ->
+                            trendsFocus = metric
+                            navController.navigate(Tab.TRENDS.route) {
+                                popUpTo(Tab.TODAY.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
                         contentPadding = contentPadding,
                     )
                 }
@@ -323,6 +333,8 @@ fun BodyFitAppScreen(
                         hourlyWater = hourlyWater,
                         hourlySessions = hourlySessions,
                         onSelectDay = viewModel::showHoursFor,
+                        focus = trendsFocus,
+                        onFocusHandled = { trendsFocus = null },
                         contentPadding = contentPadding,
                     )
                 }

@@ -74,6 +74,8 @@ fun TodayScreen(
     onLogWater: (Int) -> Unit,
     onOpenMenu: () -> Unit,
     onOpenHealth: () -> Unit,
+    /** Opens Trends on the given metric for the active day. */
+    onOpenTrends: (Metric) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -148,6 +150,7 @@ fun TodayScreen(
                                         ({ sourceOf = Metric.HEART_POINTS })
                                     else -> null
                                 },
+                                onOpen = { onOpenTrends(metric) },
                             )
                         },
                         center = GaugeCenter(
@@ -155,6 +158,7 @@ fun TodayScreen(
                             caption = "kcal from activity",
                             color = Metric.CALORIES.textColor(viz),
                             onInfo = { sourceOf = Metric.CALORIES },
+                            onOpen = { onOpenTrends(Metric.CALORIES) },
                         ),
                     )
                     Spacer(Modifier.height(16.dp))
