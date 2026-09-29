@@ -72,6 +72,29 @@ and only time spent moving is billed. Waiting at a crossing is not exercise. Thr
 rather than one because the top of a jump is briefly weightless and would otherwise read
 as a stop.
 
+### Scoring a window that outlived its minute
+
+Every figure a window earns scales with the minutes it represents, not with the one minute
+it was meant to be. That matters because a window does not always get closed on time. A
+process the system freezes leaves one open for as long as the freeze lasts, and a service
+restarted after a kill reads the whole gap out of the cumulative step counter and banks it
+in a single go.
+
+Awarding one move minute and at most two heart points per window, whatever its length, is
+what made a frozen phone report a fraction of the walking it had counted. The steps came
+back, because the hardware counter is cumulative; the minutes they were worth did not. A
+Realme running Oplus's app-freezing framework showed 12,269 steps against 45 move minutes,
+which is 273 steps a minute, while the same walk on a Xiaomi gave 146.
+
+Past `MAX_HUMAN_CADENCE`, 220 steps a minute, the elapsed time is not believable: sustained
+running sits near 180 and a sprinter's peak near 250. The duration is then inferred from the
+steps at `RECOVERY_CADENCE`, a moderate 100 a minute. Those minutes and their energy cost
+stand, but they earn no heart points, because a heart point is a claim about intensity and
+intensity is exactly what was not observed.
+
+The scoring lives in `Metrics.scoreWindow` rather than in the service, so it is a pure
+function of steps, elapsed time and body measurements, and is tested against both failures.
+
 While a session runs the tracker still counts steps but stops scoring its 60-second
 windows. Without that a run would be billed twice, once through its steps and once through
 the session. The flag lives in the tracker's DataStore rather than the database, because

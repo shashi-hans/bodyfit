@@ -246,9 +246,10 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
      * that starts at 10:00:40 is measured to 10:01:40. When it closes, no new window
      * opens until the next step, so standing still adds nothing.
      *
-     * A window is scored on the time it actually ran, not on an assumed 60 seconds. The
-     * tick can only notice it has expired up to [TICK_MS] late, and treating 65 seconds
-     * of steps as a minute would read as a pace nobody walked.
+     * A window is scored on the time it actually ran, not on an assumed 60 seconds, and
+     * every figure scales with that. The tick can only notice a window has expired up to
+     * [TICK_MS] late, and a frozen process can leave one open for half an hour, which is
+     * a great deal more than a minute of walking to throw away. See [Metrics.scoreWindow].
      */
     private suspend fun flush() {
         val now = System.currentTimeMillis()
@@ -272,11 +273,24 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
             // A timed exercise scores its own minutes. Scoring this window as well would
             // bill a run twice: once through its steps and once through the session.
             if (!sessionActive) {
-                val ranForMinutes = (now - windowStartMs) / WINDOW_MS.toDouble()
-                val cadence = (stepsInWindow / ranForMinutes).toInt()
-                if (Metrics.isMoveMinute(cadence)) moveMinutes = 1
-                heartPoints = Metrics.heartPointsForMinute(cadence)
-                kcal = Metrics.kcalForMinute(cadence, settings.weightKg, settings.heightCm) * ranForMinutes
+                val score = Metrics.scoreWindow(
+                    steps = stepsInWindow,
+                    elapsedMs = now - windowStartMs,
+                    weightKg = settings.weightKg,
+                    heightCm = settings.heightCm,
+                )
+                moveMinutes = score.moveMinutes
+                heartPoints = score.heartPoints
+                kcal = score.kcal
+                if (score.inferred) {
+                    // Worth a line: it means the process was frozen or killed for long
+                    // enough that the phone, not the user, decided what got counted.
+                    Log.i(
+                        TAG,
+                        "window of $stepsInWindow steps timed at an impossible pace; " +
+                            "scored as ${score.moveMinutes} min at ${score.cadence} spm",
+                    )
+                }
             }
             scoreDate = windowDate
             scoreHour = windowHour
@@ -319,8 +333,10 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
             val date = Dates.today()
             repository.observeDay(date).collectLatest { record ->
                 if (!Permissions.hasNotifications(this@StepTrackerService)) return@collectLatest
-                val current = repository.currentSettings()
-                val card = ActivityNotification.build(this@StepTrackerService, record, current)
+                // The collector above already holds these. Reading them back from DataStore
+                // here meant a disk-backed read every time the day's row changed, which
+                // while someone is walking is once every tick.
+                val card = ActivityNotification.build(this@StepTrackerService, record, settings)
                 try {
                     NotificationManagerCompat.from(this@StepTrackerService).notify(ActivityNotification.ID, card)
                 } catch (e: SecurityException) {

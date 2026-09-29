@@ -29,6 +29,35 @@ object Metrics {
     /** Steps per minute that scores two heart points (vigorous effort). */
     const val VIGOROUS_CADENCE = 130
 
+    /**
+     * Steps a minute past which the clock is wrong rather than the legs.
+     *
+     * Sustained running sits near 180 and a sprinter's peak near 250, so nothing above
+     * this was produced by a person in the time the window thinks it ran. It is produced
+     * two ways, both of them the phone's doing: a process frozen by the system leaves a
+     * window open far longer than a minute, and a service restarted after a kill reads
+     * the whole gap out of the cumulative counter and banks it in one go.
+     */
+    const val MAX_HUMAN_CADENCE = 220
+
+    /**
+     * Minutes past which a window's own clock stops describing what happened inside it.
+     *
+     * The tick runs every five seconds, so a window is normally closed within moments of
+     * its minute. Anything much longer means the process was not running for most of it,
+     * and the steps sit somewhere unknown inside the gap rather than spread evenly across
+     * it.
+     */
+    const val LATE_TICK_MINUTES = 2.0
+
+    /**
+     * The pace assumed for steps whose timing was lost.
+     *
+     * A moderate walk. It cannot be measured after the fact, so it is stated rather than
+     * implied, and it is used only to work out how long the steps must have taken.
+     */
+    const val RECOVERY_CADENCE = 100
+
     fun strideMeters(heightCm: Int): Double = heightCm * STRIDE_FACTOR / 100.0
 
     fun distanceKm(steps: Int, heightCm: Int): Double = steps * strideMeters(heightCm) / 1000.0
@@ -129,4 +158,80 @@ object Metrics {
      */
     fun kcalForMinute(cadence: Int, weightKg: Int, heightCm: Int = REFERENCE_HEIGHT_CM): Double =
         (metForCadence(cadence, heightCm) - 1.0).coerceAtLeast(0.0) * 3.5 * weightKg / 200.0
+
+    /** What one closed window earned. */
+    data class WindowScore(
+        val moveMinutes: Int,
+        val heartPoints: Int,
+        val kcal: Double,
+        /** The pace the score was worked out at, for logging and tests. */
+        val cadence: Int,
+        /** True when the duration was inferred from the steps rather than timed. */
+        val inferred: Boolean,
+    )
+
+    /**
+     * Scores a closed window of [steps] that stayed open for [elapsedMs].
+     *
+     * Every figure scales with the minutes the window actually represents. Awarding one
+     * move minute and at most two heart points per window, whatever its length, is what
+     * made a frozen phone report a fraction of the walking it had counted: the steps came
+     * back from the cumulative counter but the minutes they were worth did not.
+     *
+     * A window below [MIN_MOVE_STEPS] a minute earns nothing: not a minute, not a point,
+     * not a calorie. Standing up to reach for something opens a window like any other step
+     * does, and billing it is how a day of sitting still accumulates calories.
+     *
+     * Past [MAX_HUMAN_CADENCE] the elapsed time is not believable, so the duration is
+     * inferred from the steps at [RECOVERY_CADENCE] instead. Those minutes and their
+     * energy cost stand, but they earn no heart points: a heart point is a claim about
+     * intensity, and intensity is exactly what was not observed.
+     */
+    fun scoreWindow(
+        steps: Int,
+        elapsedMs: Long,
+        weightKg: Int,
+        heightCm: Int = REFERENCE_HEIGHT_CM,
+    ): WindowScore {
+        if (steps <= 0 || elapsedMs <= 0) return WindowScore(0, 0, 0.0, 0, inferred = false)
+
+        val elapsedMinutes = elapsedMs / 60_000.0
+        val walkedMinutes = steps / RECOVERY_CADENCE.toDouble()
+
+        val minutes = when {
+            // Banked in one go by a service that had just restarted. The steps were taken
+            // before this window opened, so its clock says nothing at all about them and
+            // the walk they represent can be longer than the window was.
+            steps / elapsedMinutes > MAX_HUMAN_CADENCE -> walkedMinutes
+
+            // A window the tick could not close on time. These steps did happen inside it,
+            // so the walking cannot have outlasted the window, but a short walk inside a
+            // long freeze is exactly what this looks like: crediting the whole gap would
+            // turn an hour of sitting still into an hour of movement.
+            elapsedMinutes > LATE_TICK_MINUTES -> minOf(elapsedMinutes, walkedMinutes)
+
+            else -> elapsedMinutes
+        }
+        val inferred = minutes != elapsedMinutes
+        val cadence = (steps / minutes).toInt()
+
+        // One floor for the whole window, not just for its minute. The MET curve bottoms
+        // out at its slowest anchor and never falls below it, so a window holding a single
+        // step used to be billed a full minute at that floor rate, the same as one holding
+        // nine. Sixty such trips across a room added about 31 kcal to a day for walking
+        // nowhere. Movement too slight to earn a move minute now earns nothing at all.
+        val counts = isMoveMinute(cadence)
+
+        return WindowScore(
+            moveMinutes = if (counts) Math.round(minutes).toInt() else 0,
+            heartPoints = if (inferred || !counts) {
+                0
+            } else {
+                Math.round(heartPointsForMinute(cadence) * minutes).toInt()
+            },
+            kcal = if (counts) kcalForMinute(cadence, weightKg, heightCm) * minutes else 0.0,
+            cadence = cadence,
+            inferred = inferred,
+        )
+    }
 }
