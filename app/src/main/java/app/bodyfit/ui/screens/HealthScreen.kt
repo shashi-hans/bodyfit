@@ -9,11 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,8 +28,10 @@ import app.bodyfit.data.Dates
 import app.bodyfit.data.UserSettings
 import app.bodyfit.insights.Insights
 import app.bodyfit.ui.components.ProgressMeter
+import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.theme.LocalViz
+import app.bodyfit.ui.theme.color
 import java.util.Locale
 
 /**
@@ -57,12 +56,6 @@ fun HealthScreen(
         Insights.healthScore(allDays, settings, Dates.parse(activeDate))
     }
     val bmiRating = Insights.bmiRating(score.bmi)
-
-    fun colorFor(rating: Insights.Rating): Color = when (rating) {
-        Insights.Rating.GOOD -> viz.good
-        Insights.Rating.WARNING -> viz.warning
-        Insights.Rating.CRITICAL -> viz.critical
-    }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -92,9 +85,8 @@ fun HealthScreen(
         item { SectionHeader(emoji = "🩺", title = "Wellbeing") }
 
         item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 24.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -111,12 +103,12 @@ fun HealthScreen(
                     Text(
                         text = score.band,
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                        color = colorFor(score.rating),
+                        color = score.rating.color(viz),
                     )
                     Spacer(Modifier.height(12.dp))
                     ProgressMeter(
                         progress = score.score / 100f,
-                        color = colorFor(score.rating),
+                        color = score.rating.color(viz),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
@@ -132,9 +124,8 @@ fun HealthScreen(
         item { SectionHeader(emoji = "⚖️", title = "Body mass index") }
 
         item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 20.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -147,7 +138,7 @@ fun HealthScreen(
                         Text(
                             text = "  ${Insights.bmiBand(score.bmi)}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = colorFor(bmiRating),
+                            color = bmiRating.color(viz),
                             modifier = Modifier.padding(bottom = 5.dp),
                         )
                     }
@@ -170,9 +161,8 @@ fun HealthScreen(
         item { SectionHeader(emoji = "🧮", title = "How this score was reached") }
 
         item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 20.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -211,9 +201,8 @@ fun HealthScreen(
         }
 
         item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 20.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {

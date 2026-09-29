@@ -9,11 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,6 +27,7 @@ import app.bodyfit.data.DailyRecord
 import app.bodyfit.data.UserSettings
 import app.bodyfit.data.Volume
 import app.bodyfit.data.WaterEntry
+import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.WaterGlass
 import java.time.Instant
@@ -57,9 +55,8 @@ fun WaterScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 28.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -117,9 +114,8 @@ fun WaterScreen(
 
         if (entries.isEmpty()) {
             item {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                SectionCard(
+                    corner = 20.dp,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
@@ -132,9 +128,8 @@ fun WaterScreen(
             }
         } else {
             item {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                SectionCard(
+                    corner = 20.dp,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column {

@@ -15,12 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
@@ -51,6 +48,7 @@ import app.bodyfit.insights.Insights
 import app.bodyfit.ui.Metric
 import app.bodyfit.ui.components.Glyph
 import app.bodyfit.ui.components.ProgressMeter
+import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.WeeklyBarChart
 import app.bodyfit.ui.theme.LocalViz
@@ -294,9 +292,8 @@ fun TrendsScreen(
         }
 
         item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 24.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -391,9 +388,8 @@ fun TrendsScreen(
         }
 
         item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 24.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -470,9 +466,8 @@ fun TrendsScreen(
 
         if (showTable) {
             item {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                SectionCard(
+                    corner = 20.dp,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -552,9 +547,8 @@ private fun HourlyCard(
     }
     val busiest = values.indices.maxByOrNull { values[it] }?.takeIf { values[it] > 0.0 }
 
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    SectionCard(
+        corner = 24.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

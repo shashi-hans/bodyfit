@@ -48,11 +48,13 @@ import app.bodyfit.ui.components.AppLogo
 import app.bodyfit.ui.components.BreathingDialog
 import app.bodyfit.ui.components.GaugeArc
 import app.bodyfit.ui.components.Glyph
+import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.TodayGauge
 import app.bodyfit.ui.components.StatCard
 import app.bodyfit.ui.theme.LocalViz
 import java.time.LocalDate
+import app.bodyfit.ui.theme.color
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -83,9 +85,8 @@ fun TodayScreen(
         item { Header(onOpenMenu) }
 
         item {
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 28.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -208,22 +209,11 @@ fun TodayScreen(
             val score = remember(allDays, settings, activeDate) {
                 Insights.healthScore(allDays, settings, Dates.parse(activeDate))
             }
-            val ratingColor = when (score.rating) {
-                Insights.Rating.GOOD -> viz.good
-                Insights.Rating.WARNING -> viz.warning
-                Insights.Rating.CRITICAL -> viz.critical
-            }
-            val bmiColor = when (Insights.bmiRating(score.bmi)) {
-                Insights.Rating.GOOD -> viz.good
-                Insights.Rating.WARNING -> viz.warning
-                Insights.Rating.CRITICAL -> viz.critical
-            }
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpenHealth),
+            val ratingColor = score.rating.color(viz)
+            val bmiColor = Insights.bmiRating(score.bmi).color(viz)
+            SectionCard(
+                corner = 28.dp,
+                modifier = Modifier.clickable(onClick = onOpenHealth),
             ) {
                 Row(
                     modifier = Modifier

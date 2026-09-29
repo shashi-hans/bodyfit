@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -26,6 +28,29 @@ import androidx.compose.ui.unit.dp
  * hue. The optional [accent] tints only the meter, so several of these can sit side by
  * side without turning the screen into a color chart.
  */
+/**
+ * The panel every section on every screen sits in.
+ *
+ * Fourteen call sites spelled out the same shape and the same container colour by hand.
+ * One of them only had to be edited carelessly for the screens to stop matching, and the
+ * colour is the half nobody would notice: a corner radius is obvious, a container one step
+ * off the right grey is not. The radius stays a parameter because it genuinely varies, 28
+ * for the card a screen is built around and 20 for a list of rows inside one.
+ */
+@Composable
+fun SectionCard(
+    modifier: Modifier = Modifier,
+    corner: Dp = 24.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        shape = RoundedCornerShape(corner),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = modifier.fillMaxWidth(),
+        content = content,
+    )
+}
+
 @Composable
 fun StatCard(
     emoji: String,

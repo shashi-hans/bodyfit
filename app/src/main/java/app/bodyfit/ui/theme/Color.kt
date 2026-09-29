@@ -3,6 +3,7 @@ package app.bodyfit.ui.theme
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import app.bodyfit.insights.Insights
 
 /**
  * Colors for data marks: rings, bars and meters.
@@ -99,3 +100,16 @@ val DarkViz = VizColors(
 )
 
 val LocalViz = staticCompositionLocalOf { LightViz }
+
+/**
+ * The colour a rating wears, decided once.
+ *
+ * Three screens drew this mapping out by hand, which is three chances for one of them to
+ * disagree with the others about what "warning" looks like. The word itself is always
+ * printed beside it, so the colour is a second encoding and never the only one.
+ */
+fun Insights.Rating.color(viz: VizColors): Color = when (this) {
+    Insights.Rating.GOOD -> viz.good
+    Insights.Rating.WARNING -> viz.warning
+    Insights.Rating.CRITICAL -> viz.critical
+}
