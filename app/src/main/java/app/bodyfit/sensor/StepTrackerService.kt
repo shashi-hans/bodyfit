@@ -25,6 +25,9 @@ import app.bodyfit.data.UserSettings
 import app.bodyfit.notification.ActivityNotification
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.launch
 
 /**
@@ -53,15 +56,28 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
     private val softwarePedometer = SoftwarePedometer()
 
     private val handler = Handler(Looper.getMainLooper())
+
+    /**
+     * Held for the length of a flush. A tick that finds it taken skips its turn: a write
+     * slower than [TICK_MS] would otherwise overlap the next one, and the older flush could
+     * persist an older step baseline last, which a restart would count again.
+     */
+    private val flushLock = Mutex()
+
     private val ticker = object : Runnable {
         override fun run() {
             lifecycleScope.launch {
+                if (!flushLock.tryLock()) return@launch
                 // A write can fail: the disk is full, the row is locked, the process is
                 // shutting down. An uncaught throw here reaches the default handler and
                 // takes the whole service down, losing the counter with it, so the tick
                 // swallows it and the next one retries with the steps still banked.
-                runCatching { flush() }
-                    .onFailure { Log.w(TAG, "tick failed, retrying on the next one", it) }
+                try {
+                    runCatching { flush() }
+                        .onFailure { Log.w(TAG, "tick failed, retrying on the next one", it) }
+                } finally {
+                    flushLock.unlock()
+                }
             }
             handler.postDelayed(this, TICK_MS)
         }
@@ -117,6 +133,10 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
             repository.settings.collect { settings = it }
         }
         lifecycleScope.launch {
+            // Both services share this process, so a session flag with no live session behind
+            // it was left by a process that died mid-session, and would stop walking being
+            // scored until something cleared it.
+            if (ExerciseSessionService.state.value == null) trackerState.setSessionStartedAt(0L)
             trackerState.sessionActive.collect { sessionActive = it }
         }
         restartNotificationUpdates()
@@ -137,7 +157,9 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        val restart = PendingIntent.getService(
+        // A foreground-service intent: a plain getService from an alarm is a background
+        // start, which Android 8 and later refuse.
+        val restart = PendingIntent.getForegroundService(
             this,
             RESTART_REQUEST,
             Intent(applicationContext, StepTrackerService::class.java),
@@ -172,8 +194,11 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
      */
     private fun onAcceleration(event: SensorEvent) {
         if (event.values.size < 3) return
+        // The sample's own time, not its arrival: the sensor delivers in one-second batches,
+        // and one arrival time for a whole batch would squeeze its steps below the minimum
+        // gap between footfalls.
         val counted = softwarePedometer.onSample(
-            timestampMs = System.currentTimeMillis(),
+            timestampMs = event.timestamp / 1_000_000L,
             x = event.values[0],
             y = event.values[1],
             z = event.values[2],
@@ -246,9 +271,10 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
      * that starts at 10:00:40 is measured to 10:01:40. When it closes, no new window
      * opens until the next step, so standing still adds nothing.
      *
-     * A window is scored on the time it actually ran, not on an assumed 60 seconds. The
-     * tick can only notice it has expired up to [TICK_MS] late, and treating 65 seconds
-     * of steps as a minute would read as a pace nobody walked.
+     * A window is scored on the time it actually ran, not on an assumed 60 seconds, and
+     * every figure scales with that. The tick can only notice a window has expired up to
+     * [TICK_MS] late, and a frozen process can leave one open for half an hour, which is
+     * a great deal more than a minute of walking to throw away. See [Metrics.scoreWindow].
      */
     private suspend fun flush() {
         val now = System.currentTimeMillis()
@@ -272,11 +298,24 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
             // A timed exercise scores its own minutes. Scoring this window as well would
             // bill a run twice: once through its steps and once through the session.
             if (!sessionActive) {
-                val ranForMinutes = (now - windowStartMs) / WINDOW_MS.toDouble()
-                val cadence = (stepsInWindow / ranForMinutes).toInt()
-                if (Metrics.isMoveMinute(cadence)) moveMinutes = 1
-                heartPoints = Metrics.heartPointsForMinute(cadence)
-                kcal = Metrics.kcalForMinute(cadence, settings.weightKg, settings.heightCm) * ranForMinutes
+                val score = Metrics.scoreWindow(
+                    steps = stepsInWindow,
+                    elapsedMs = now - windowStartMs,
+                    weightKg = settings.weightKg,
+                    heightCm = settings.heightCm,
+                )
+                moveMinutes = score.moveMinutes
+                heartPoints = score.heartPoints
+                kcal = score.kcal
+                if (score.inferred) {
+                    // Worth a line: it means the process was frozen or killed for long
+                    // enough that the phone, not the user, decided what got counted.
+                    Log.i(
+                        TAG,
+                        "window of $stepsInWindow steps timed at an impossible pace; " +
+                            "scored as ${score.moveMinutes} min at ${score.cadence} spm",
+                    )
+                }
             }
             scoreDate = windowDate
             scoreHour = windowHour
@@ -312,22 +351,30 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
         }
     }
 
-    /** Redraws the card whenever today's row changes, including water logged elsewhere. */
+    /**
+     * Redraws the card whenever today's row or the settings change, including water logged
+     * elsewhere and new cup sizes.
+     */
     private fun restartNotificationUpdates() {
         notificationJob?.cancel()
         notificationJob = lifecycleScope.launch {
             val date = Dates.today()
-            repository.observeDay(date).collectLatest { record ->
-                if (!Permissions.hasNotifications(this@StepTrackerService)) return@collectLatest
-                val current = repository.currentSettings()
-                val card = ActivityNotification.build(this@StepTrackerService, record, current)
-                try {
-                    NotificationManagerCompat.from(this@StepTrackerService).notify(ActivityNotification.ID, card)
-                } catch (e: SecurityException) {
-                    // Notification access was revoked between the check above and this call.
-                    Log.w(TAG, "cannot post the lock-screen card", e)
+            // DataStore's flow emits from memory after the first read and only on a write, so
+            // combining it here adds no disk read per step tick.
+            // Redrawn only when something the card shows has changed. The day's row is
+            // rewritten every tick while walking, often with nothing visible moving.
+            combine(repository.observeDay(date), repository.settings) { record, current -> record to current }
+                .distinctUntilChangedBy { (record, current) -> ActivityNotification.contentKey(record, current) }
+                .collectLatest { (record, current) ->
+                    if (!Permissions.hasNotifications(this@StepTrackerService)) return@collectLatest
+                    val card = ActivityNotification.build(this@StepTrackerService, record, current)
+                    try {
+                        NotificationManagerCompat.from(this@StepTrackerService).notify(ActivityNotification.ID, card)
+                    } catch (e: SecurityException) {
+                        // Notification access was revoked between the check above and this call.
+                        Log.w(TAG, "cannot post the lock-screen card", e)
+                    }
                 }
-            }
         }
     }
 

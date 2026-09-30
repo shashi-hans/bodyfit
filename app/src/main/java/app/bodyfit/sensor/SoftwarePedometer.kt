@@ -45,8 +45,8 @@ class SoftwarePedometer(
     /**
      * Feeds one accelerometer sample and returns how many steps it completed, 0 or 1.
      *
-     * [timestampMs] is wall-clock milliseconds; only differences are used, so any
-     * monotonic source works as long as it is consistent.
+     * [timestampMs] is in milliseconds; only differences are used, so any monotonic source
+     * works as long as it is consistent. Callers pass the sensor event's own timestamp.
      */
     fun onSample(timestampMs: Long, x: Float, y: Float, z: Float): Int {
         val magnitude = sqrt(x * x + y * y + z * z)

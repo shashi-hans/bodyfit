@@ -3,7 +3,6 @@ package app.bodyfit.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,6 +27,8 @@ import app.bodyfit.ui.components.GoalSlider
 import app.bodyfit.ui.components.RecommendationRow
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.SettingsCard
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.components.thousands
 
 /**
@@ -121,7 +122,7 @@ fun GoalsScreen(
                     emoji = "👣",
                     label = "Steps this week",
                     value = settings.weeklyStepGoal,
-                    range = 10_000..200_000,
+                    range = UserSettings.WEEKLY_STEP_GOAL_RANGE,
                     step = 5_000,
                     format = { "${thousands(it)} steps" },
                     onCommit = onWeeklyStepGoal,
@@ -130,7 +131,7 @@ fun GoalsScreen(
                     emoji = "🫀",
                     label = "Heart points this week",
                     value = settings.weeklyHeartPointGoal,
-                    range = 20..500,
+                    range = UserSettings.WEEKLY_HEART_POINT_GOAL_RANGE,
                     step = 5,
                     format = { "$it pts" },
                     onCommit = onWeeklyHeartPointGoal,
@@ -207,12 +208,11 @@ private fun RecommendationDialog(
                     settings.moveMinuteGoal == r.moveMinuteGoal,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "From your age, weight and sex. Steps drop with age; heart points and " +
-                        "move minutes come from the WHO's 150 moderate minutes a week; water is " +
-                        "35 ml per kg. General guidance, not medical advice.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                WellnessNote(
+                    text = "From your age, weight and sex. Steps drop with age; heart points " +
+                        "and move minutes come from the WHO's 150 moderate minutes a week; " +
+                        "water is 35 ml per kg. ${Wellness.SHORT} These are general targets " +
+                        "for a body of your build, not advice for you, and not a prescription.",
                 )
             }
         },

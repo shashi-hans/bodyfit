@@ -9,30 +9,27 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.bodyfit.data.DailyRecord
 import app.bodyfit.data.Dates
 import app.bodyfit.data.UserSettings
 import app.bodyfit.insights.Insights
+import app.bodyfit.ui.components.BackHeader
 import app.bodyfit.ui.components.ProgressMeter
+import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.theme.LocalViz
+import app.bodyfit.ui.theme.color
 import java.util.Locale
 
 /**
@@ -58,43 +55,18 @@ fun HealthScreen(
     }
     val bmiRating = Insights.bmiRating(score.bmi)
 
-    fun colorFor(rating: Insights.Rating): Color = when (rating) {
-        Insights.Rating.GOOD -> viz.good
-        Insights.Rating.WARNING -> viz.warning
-        Insights.Rating.CRITICAL -> viz.critical
-    }
-
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Text(
-                    text = "BMI and wellbeing",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
+        item { BackHeader(title = "BMI and wellbeing", onBack = onBack) }
 
         item { SectionHeader(emoji = "🩺", title = "Wellbeing") }
 
         item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 24.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -111,12 +83,12 @@ fun HealthScreen(
                     Text(
                         text = score.band,
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                        color = colorFor(score.rating),
+                        color = score.rating.color(viz),
                     )
                     Spacer(Modifier.height(12.dp))
                     ProgressMeter(
                         progress = score.score / 100f,
-                        color = colorFor(score.rating),
+                        color = score.rating.color(viz),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
@@ -132,9 +104,8 @@ fun HealthScreen(
         item { SectionHeader(emoji = "⚖️", title = "Body mass index") }
 
         item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 20.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -147,7 +118,7 @@ fun HealthScreen(
                         Text(
                             text = "  ${Insights.bmiBand(score.bmi)}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = colorFor(bmiRating),
+                            color = bmiRating.color(viz),
                             modifier = Modifier.padding(bottom = 5.dp),
                         )
                     }
@@ -170,9 +141,8 @@ fun HealthScreen(
         item { SectionHeader(emoji = "🧮", title = "How this score was reached") }
 
         item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 20.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -211,9 +181,8 @@ fun HealthScreen(
         }
 
         item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 20.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -223,14 +192,15 @@ fun HealthScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = "👣 ${score.averageSteps} steps a day, averaged over the last 14 days",
+                        text = "👣 ${score.averageSteps} steps a day over the 13 full days before today",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "The step average divides by all 14 days, so a new install scores " +
-                            "low simply for having no history yet.",
+                        text = "A day with no steps since the first one on record counts as zero. " +
+                            "Days before the app was installed are left out, and steps only " +
+                            "count toward the score after three full days of history.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -239,12 +209,10 @@ fun HealthScreen(
         }
 
         item {
-            Text(
-                text = "Indicative only. This is not a medical assessment and not an underwriting " +
-                    "decision. It is a heuristic with round numbers, useful as a nudge and nothing " +
-                    "more. Everything it uses stays on this phone.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            WellnessNote(
+                text = Wellness.NOTE + " This score in particular is a heuristic built from " +
+                    "round numbers: it is neither a medical assessment nor an underwriting " +
+                    "decision. Everything it uses stays on this phone.",
             )
         }
 

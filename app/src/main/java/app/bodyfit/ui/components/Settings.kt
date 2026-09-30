@@ -1,13 +1,13 @@
 package app.bodyfit.ui.components
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -18,7 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.bodyfit.data.Sex
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -32,11 +34,7 @@ import kotlin.math.roundToInt
 /** A rounded panel holding one group of settings rows. */
 @Composable
 fun SettingsCard(content: @Composable () -> Unit) {
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    SectionCard(corner = 20.dp) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -128,7 +126,9 @@ fun InfoLine(emoji: String, text: String) {
 fun KeyValueRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        // A spacer rather than SpaceBetween: a value long enough to wrap, such as a file
+        // path, otherwise runs straight into the label with no gap at all.
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = label,
@@ -139,6 +139,8 @@ fun KeyValueRow(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -150,3 +152,33 @@ fun snap(raw: Float, range: IntRange, step: Int): Int {
 }
 
 fun thousands(value: Int): String = String.format(Locale.getDefault(), "%,d", value)
+
+/**
+ * One chip per [Sex], for setup and About you. [selected] is null when nothing is chosen
+ * yet: setup preselects none, so "Prefer not to say" is an answer rather than a default.
+ */
+@Composable
+fun SexChips(selected: Sex?, onSelect: (Sex) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+    ) {
+        Sex.entries.forEach { option ->
+            FilterChip(
+                selected = option == selected,
+                onClick = { onSelect(option) },
+                label = {
+                    Text(
+                        when (option) {
+                            Sex.MALE -> "Male"
+                            Sex.FEMALE -> "Female"
+                            Sex.UNSPECIFIED -> "Prefer not to say"
+                        }
+                    )
+                },
+            )
+        }
+    }
+}

@@ -60,6 +60,22 @@ object ActivityNotification {
         .setContentText("Body Fit is watching the step sensor")
         .build()
 
+    /**
+     * Everything [build] prints, so a caller can skip a redraw that would change nothing.
+     * Kept beside [build] so a figure added to the card is added here in the same edit.
+     */
+    fun contentKey(record: DailyRecord, settings: UserSettings): List<Any> = listOf(
+        record.steps,
+        record.activeKcal.toInt(),
+        record.heartPoints,
+        record.moveMinutes,
+        record.waterMl,
+        settings.heightCm,
+        settings.stepGoal,
+        settings.waterGoalMl,
+        settings.cupSizesMl,
+    )
+
     fun build(context: Context, record: DailyRecord, settings: UserSettings): Notification {
         val distanceKm = Metrics.distanceKm(record.steps, settings.heightCm)
         val kcal = record.activeKcal.toInt()
@@ -69,7 +85,12 @@ object ActivityNotification {
         // percentage rides along in the title instead.
         val builder = base(context)
             .setContentTitle("👣 ${format(record.steps)} steps · $percent%")
-            .setContentText("🔥 $kcal kcal   💧 ${Volume.format(record.waterMl)} / ${Volume.format(settings.waterGoalMl)}")
+            // Heart points earn their place on the collapsed line: they are the one figure
+            // here that says how hard the walking was rather than how much of it there was.
+            // The water goal moves to the expanded view to pay for the room.
+            .setContentText(
+                "🔥 $kcal kcal   🫀 ${record.heartPoints} pts   💧 ${Volume.format(record.waterMl)}"
+            )
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
                     buildString {
@@ -82,10 +103,7 @@ object ActivityNotification {
                 )
             )
 
-        builder.addAction(waterAction(context, settings.defaultCupMl))
-        if (settings.defaultCupMl != 500) {
-            builder.addAction(waterAction(context, 500))
-        }
+        settings.cupSizesMl.forEach { builder.addAction(waterAction(context, it)) }
         return builder.build()
     }
 
@@ -106,7 +124,8 @@ object ActivityNotification {
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(openApp(context))
 
-    private fun openApp(context: Context): PendingIntent {
+    /** Opens the app from a notification. Shared with the exercise session card. */
+    fun openApp(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         return PendingIntent.getActivity(
@@ -117,7 +136,8 @@ object ActivityNotification {
         )
     }
 
-    private fun waterAction(context: Context, amountMl: Int): NotificationCompat.Action {
+    /** A button that logs [amountMl] of water. Shared with the water reminder. */
+    fun waterAction(context: Context, amountMl: Int): NotificationCompat.Action {
         val intent = Intent(context, WaterActionReceiver::class.java).apply {
             action = WaterActionReceiver.ACTION_ADD_WATER
             putExtra(WaterActionReceiver.EXTRA_AMOUNT_ML, amountMl)
@@ -128,7 +148,7 @@ object ActivityNotification {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Action.Builder(0, "💧 +$amountMl ml", pending).build()
+        return NotificationCompat.Action.Builder(0, "+$amountMl ml", pending).build()
     }
 
     private fun format(value: Int): String = String.format(Locale.getDefault(), "%,d", value)

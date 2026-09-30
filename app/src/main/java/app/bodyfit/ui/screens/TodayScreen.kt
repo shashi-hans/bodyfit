@@ -7,28 +7,26 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Button
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -40,21 +38,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.bodyfit.data.DailyRecord
 import app.bodyfit.data.Dates
+import app.bodyfit.data.ExerciseSession
+import app.bodyfit.data.ExerciseType
 import app.bodyfit.data.UserSettings
-import app.bodyfit.data.Volume
 import app.bodyfit.insights.Insights
 import app.bodyfit.ui.Metric
 import app.bodyfit.ui.components.AppLogo
 import app.bodyfit.ui.components.BreathingDialog
 import app.bodyfit.ui.components.GaugeArc
-import app.bodyfit.ui.components.Glyph
-import app.bodyfit.ui.components.SectionHeader
+import app.bodyfit.ui.components.GaugeCenter
+import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.TodayGauge
-import app.bodyfit.ui.components.StatCard
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.theme.LocalViz
-import java.time.LocalDate
+import app.bodyfit.ui.theme.color
+import kotlinx.coroutines.delay
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
@@ -62,30 +62,48 @@ fun TodayScreen(
     record: DailyRecord,
     week: List<DailyRecord>,
     allDays: List<DailyRecord>,
+    /** Today's logged exercise, so the figures can say which part came from it. */
+    sessions: List<ExerciseSession>,
     settings: UserSettings,
     activeDate: String,
     onLogWater: (Int) -> Unit,
     onOpenMenu: () -> Unit,
     onOpenHealth: () -> Unit,
+    /** Opens Trends on the given metric for the active day. */
+    onOpenTrends: (Metric) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     val viz = LocalViz.current
     var breathing by rememberSaveable { mutableStateOf(false) }
+    var calorieInfo by rememberSaveable { mutableStateOf(false) }
+    var sourceOf by rememberSaveable { mutableStateOf<Metric?>(null) }
     val stepProgress = progressOf(Metric.STEPS, record, settings)
     val weekSteps = week.sumOf { it.steps }
+    // Ticks once a minute, so figures that follow the clock rather than the data, the
+    // resting share of the calories and the greeting, move while the phone sits still.
+    val minute by produceState(System.currentTimeMillis() / 60_000L) {
+        while (true) {
+            delay(60_000L - System.currentTimeMillis() % 60_000L)
+            value = System.currentTimeMillis() / 60_000L
+        }
+    }
+    // Active plus the resting burn the day has accrued, which is the figure another tracker
+    // shows as "calories".
+    val totalKcal = remember(record, settings, activeDate, minute) {
+        record.activeKcal + Insights.restingKcalSoFar(settings, Dates.elapsedFraction(activeDate))
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { Header(onOpenMenu) }
+        item { Header(name = settings.name, minute = minute, onOpenMenu = onOpenMenu) }
 
         item {
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 28.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -95,20 +113,55 @@ fun TodayScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     TodayGauge(
-                        arcs = Metric.GAUGE_ARCS.map { metric ->
+                        arcs = Metric.GAUGE_FIGURES.map { metric ->
+                            // Calories is the one figure not measured against its goal: the
+                            // goal is an activity target, and the figure here is the whole
+                            // day's burn. The activity number it is scored on is in the well.
+                            val isCalories = metric == Metric.CALORIES
                             GaugeArc(
                                 emoji = metric.emoji,
                                 iconRes = metric.iconRes,
                                 vector = metric.vector,
                                 label = metric.label,
-                                // Bare: the goal line under it carries the unit.
-                                value = metric.format(metric.value(record, settings)),
-                                goalLabel = metric.formatWithUnit(metric.dailyGoal(settings)),
+                                // Bare: the caption under it carries the unit.
+                                value = if (isCalories) {
+                                    metric.format(totalKcal)
+                                } else {
+                                    metric.format(metric.value(record, settings))
+                                },
+                                caption = if (isCalories) {
+                                    // Short enough to survive a third of a phone's width.
+                                    // Read against "from activity" in the well, which is
+                                    // what says where the rest of this number comes from.
+                                    "kcal total"
+                                } else {
+                                    "of ${metric.formatWithUnit(metric.dailyGoal(settings))}"
+                                },
                                 progress = progressOf(metric, record, settings),
+                                hasArc = metric in Metric.GAUGE_ARCS,
                                 color = metric.color(viz),
                                 textColor = metric.textColor(viz),
+                                // The only figure here that is not what its label says at
+                                // face value: "calories" usually means activity, and this
+                                // one counts resting burn too.
+                                onInfo = when {
+                                    isCalories -> ({ calorieInfo = true })
+                                    // Heart points are the other figure worth opening: they
+                                    // are earned two ways, and which one is not obvious.
+                                    metric == Metric.HEART_POINTS ->
+                                        ({ sourceOf = Metric.HEART_POINTS })
+                                    else -> null
+                                },
+                                onOpen = { onOpenTrends(metric) },
                             )
                         },
+                        center = GaugeCenter(
+                            value = Metric.CALORIES.format(record.activeKcal),
+                            caption = "kcal from activity",
+                            color = Metric.CALORIES.textColor(viz),
+                            onInfo = { sourceOf = Metric.CALORIES },
+                            onOpen = { onOpenTrends(Metric.CALORIES) },
+                        ),
                     )
                     Spacer(Modifier.height(16.dp))
                     // The hearts show the share of each goal, so this line adds the
@@ -132,73 +185,21 @@ fun TodayScreen(
             }
         }
 
-        // The gauge above owns the only three data hues this screen may show at once.
-        // Everything below is neutral: emoji and label carry identity, ink carries value.
-        // Water and its add buttons share one row, so the action sits beside the number
-        // it changes instead of a card's height below it.
+        // Every measured number is an arc above, so nothing below repeats one. What is left
+        // here is the action: the amounts that add a drink, which have no arc because they
+        // change the day rather than report it.
         item {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.height(IntrinsicSize.Min),
-            ) {
-                StatCard(
-                    emoji = Metric.WATER.emoji,
-                    label = Metric.WATER.label,
-                    value = Metric.WATER.format(record.waterMl.toDouble()),
-                    unit = Metric.WATER.unitFor(record.waterMl.toDouble()),
-                    caption = "Goal ${Volume.format(settings.waterGoalMl)}",
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                )
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-                    modifier = Modifier.fillMaxHeight(),
-                ) {
-                    listOf(settings.defaultCupMl, 500).distinct().forEach { amount ->
-                        AssistChip(
-                            onClick = { onLogWater(amount) },
-                            label = { Text("💧 +$amount ml") },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-
-        // Distance and move minutes are what the tracker measured today. BMI and wellbeing
-        // are not: they are standings derived from the body and the fortnight, so they sit
-        // in their own box with a way through to the working behind them.
-        item {
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
-                        .height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    PlainStat(
-                        emoji = Metric.DISTANCE.emoji,
-                        label = Metric.DISTANCE.label,
-                        value = Metric.DISTANCE.format(Metric.DISTANCE.value(record, settings)),
-                        unit = Metric.DISTANCE.unit,
-                        caption = "From ${Metric.STEPS.format(record.steps.toDouble())} steps",
-                        modifier = Modifier.weight(1f),
-                    )
-                    PlainStat(
-                        emoji = Metric.MOVE_MINUTES.emoji,
-                        label = Metric.MOVE_MINUTES.label,
-                        value = Metric.MOVE_MINUTES.format(record.moveMinutes.toDouble()),
-                        unit = Metric.MOVE_MINUTES.unit,
-                        caption = "Goal ${settings.moveMinuteGoal} min",
-                        modifier = Modifier.weight(1f),
+                settings.cupSizesMl.forEach { amount ->
+                    AssistChip(
+                        onClick = { onLogWater(amount) },
+                        label = { Text("💧 +$amount ml") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ),
                     )
                 }
             }
@@ -208,22 +209,11 @@ fun TodayScreen(
             val score = remember(allDays, settings, activeDate) {
                 Insights.healthScore(allDays, settings, Dates.parse(activeDate))
             }
-            val ratingColor = when (score.rating) {
-                Insights.Rating.GOOD -> viz.good
-                Insights.Rating.WARNING -> viz.warning
-                Insights.Rating.CRITICAL -> viz.critical
-            }
-            val bmiColor = when (Insights.bmiRating(score.bmi)) {
-                Insights.Rating.GOOD -> viz.good
-                Insights.Rating.WARNING -> viz.warning
-                Insights.Rating.CRITICAL -> viz.critical
-            }
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpenHealth),
+            val ratingColor = score.rating.color(viz)
+            val bmiColor = Insights.bmiRating(score.bmi).color(viz)
+            SectionCard(
+                corner = 28.dp,
+                modifier = Modifier.clickable(onClick = onOpenHealth),
             ) {
                 Row(
                     modifier = Modifier
@@ -265,6 +255,174 @@ fun TodayScreen(
     if (breathing) {
         BreathingDialog(onDismiss = { breathing = false })
     }
+
+    sourceOf?.let { metric ->
+        SourceDialog(
+            metric = metric,
+            record = record,
+            sessions = sessions,
+            onDismiss = { sourceOf = null },
+        )
+    }
+
+    if (calorieInfo) {
+        CalorieInfoDialog(
+            activeKcal = record.activeKcal,
+            totalKcal = totalKcal,
+            settings = settings,
+            onDismiss = { calorieInfo = false },
+        )
+    }
+}
+
+/**
+ * Where a day's activity calories or heart points came from, line by line.
+ *
+ * Everything the day holds is either a logged session or walking the tracker scored, so the
+ * walking share is the day's total less the sessions rather than a figure of its own. That
+ * also means the lines always add up to the number on the card, which a separately counted
+ * walking total could not promise.
+ */
+@Composable
+private fun SourceDialog(
+    metric: Metric,
+    record: DailyRecord,
+    sessions: List<ExerciseSession>,
+    onDismiss: () -> Unit,
+) {
+    val unit = if (metric == Metric.CALORIES) "kcal" else "pts"
+    val total = if (metric == Metric.CALORIES) record.activeKcal else record.heartPoints.toDouble()
+    val fromSessions = sessions.sumOf {
+        if (metric == Metric.CALORIES) it.kcal else it.heartPoints.toDouble()
+    }
+    val fromWalking = (total - fromSessions).coerceAtLeast(0.0)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("${metric.emoji}  Where today's ${metric.label.lowercase()} came from") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SourceRow(
+                    emoji = "👣",
+                    label = "Walking",
+                    value = "${metric.format(fromWalking)} $unit",
+                )
+                sessions.forEach { session ->
+                    val type = ExerciseType.from(session.type)
+                    val earned = if (metric == Metric.CALORIES) {
+                        session.kcal
+                    } else {
+                        session.heartPoints.toDouble()
+                    }
+                    SourceRow(
+                        emoji = type?.emoji ?: "🏃",
+                        label = "${type?.label ?: session.type}, ${clock(session.seconds)}",
+                        value = "${metric.format(earned)} $unit",
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SourceRow(
+                    emoji = metric.emoji,
+                    label = "Total today",
+                    value = "${metric.format(total)} $unit",
+                    strong = true,
+                )
+                if (sessions.isEmpty()) {
+                    Text(
+                        text = "No exercise logged today, so all of it is walking. A timed " +
+                            "session on the Exercise tab appears here as its own line.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+/** One source and what it contributed. */
+@Composable
+private fun SourceRow(emoji: String, label: String, value: String, strong: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = emoji, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            style = if (strong) {
+                MaterialTheme.typography.titleSmall
+            } else {
+                MaterialTheme.typography.bodyMedium
+            },
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/**
+ * What the total calorie figure counts, and why it is not the one the goal is scored on.
+ *
+ * Written because the number is the app's most misreadable: a tracker that says "calories"
+ * usually means activity alone, and a user who sees a thousand of them before lunch will
+ * otherwise conclude the step counter is broken.
+ */
+@Composable
+private fun CalorieInfoDialog(
+    activeKcal: Double,
+    totalKcal: Double,
+    settings: UserSettings,
+    onDismiss: () -> Unit,
+) {
+    val restingSoFar = totalKcal - activeKcal
+    val restingPerDay = Insights.restingKcalPerDay(settings)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("🔥  Calories in total") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "${Metric.CALORIES.format(totalKcal)} kcal is everything your " +
+                        "body has spent today: ${Metric.CALORIES.format(activeKcal)} from " +
+                        "moving, and ${Metric.CALORIES.format(restingSoFar)} at rest.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Resting burn is what the body spends breathing, pumping blood " +
+                        "and staying warm. It runs all day whether you move or not. Yours " +
+                        "comes to about ${Metric.CALORIES.format(restingPerDay)} kcal a day, from your " +
+                        "height, weight, age and sex. The figure above counts the share of " +
+                        "that the day has reached so far.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "Your ${settings.calorieGoal} kcal goal is an activity target, so " +
+                        "it is scored against the ${Metric.CALORIES.format(activeKcal)} in " +
+                        "the arc, not against this number.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                WellnessNote(
+                    text = "Both figures are estimates. Nothing on the phone measures your " +
+                        "metabolism; the resting figure is the Mifflin-St Jeor formula, an " +
+                        "average for your build rather than a reading of you. " +
+                        Wellness.SHORT,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 /**
@@ -329,8 +487,8 @@ private fun PlainStat(
  * misaligned copy of the text.
  */
 @Composable
-private fun Header(onOpenMenu: () -> Unit) {
-    val now = remember { LocalTime.now() }
+private fun Header(name: String, minute: Long, onOpenMenu: () -> Unit) {
+    val now = remember(minute) { LocalTime.now() }
     val greeting = when (now.hour) {
         in 5..11 -> "Good morning ☀️"
         in 12..16 -> "Good afternoon 🌤️"
@@ -339,31 +497,35 @@ private fun Header(onOpenMenu: () -> Unit) {
     }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onOpenMenu) {
-                Icon(
-                    imageVector = Icons.Filled.Menu,
-                    contentDescription = "Open menu",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            AppLogo()
+        IconButton(onClick = onOpenMenu) {
+            Icon(
+                imageVector = Icons.Filled.Menu,
+                contentDescription = "Open menu",
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
         }
-        Column(horizontalAlignment = Alignment.End) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                // The name is the one optional answer in setup, so a blank one is a choice
+                // rather than a gap. "Guest" fills the same slot a name would, which keeps
+                // the header the same shape either way.
+                text = "Hi, ${name.ifBlank { "Guest" }}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 text = greeting,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = LocalDate.now().format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault())),
-                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
         }
+        AppLogo(compact = true)
     }
 }
 

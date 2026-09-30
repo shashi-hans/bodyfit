@@ -16,6 +16,13 @@ enum class Sex { MALE, FEMALE, UNSPECIFIED }
 
 /** Goals and body measurements the user controls. Defaults follow WHO activity guidance. */
 data class UserSettings(
+    /**
+     * What to call the user on the Today screen. Blank until they type one.
+     *
+     * Never sent anywhere and never used in a calculation. It exists so the app can greet
+     * the person using it, which is why a blank one is normal rather than a gap to fill.
+     */
+    val name: String = "",
     val heightCm: Int = 170,
     val weightKg: Int = 70,
     val stepGoal: Int = 10_000,
@@ -26,7 +33,13 @@ data class UserSettings(
     val moveMinuteGoal: Int = 30,
     val weeklyStepGoal: Int = 70_000,
     val weeklyHeartPointGoal: Int = 150,
-    val defaultCupMl: Int = 250,
+    /**
+     * The three drink sizes offered as one-tap buttons, smallest first.
+     *
+     * Three because an Android notification shows at most three action buttons, and the
+     * lock-screen card and the Today screen offer the same set.
+     */
+    val cupSizesMl: List<Int> = DEFAULT_CUP_SIZES_ML,
     /** Used only by the indicative health score. Optional: the score works without them. */
     val age: Int = 30,
     val smoker: Boolean = false,
@@ -38,6 +51,48 @@ data class UserSettings(
      * both the counting and the lock-screen card together.
      */
     val trackerEnabled: Boolean = true,
+    /** Whether the drink reminder runs. Off until the user turns it on. */
+    val waterReminderEnabled: Boolean = false,
+    /** Minutes between drink reminders, one of [WATER_REMINDER_MINUTES]. */
+    val waterReminderMinutes: Int = 60,
+    /**
+     * The hours reminders may ring in, from the start of [waterReminderStartHour] up to the
+     * start of [waterReminderEndHour], where 24 is the end of the day. A start later than the
+     * end runs overnight; equal hours mean all day.
+     */
+    val waterReminderStartHour: Int = 8,
+    val waterReminderEndHour: Int = 22,
+    /**
+     * The reminder's sound: blank for the phone's default notification sound, [SOUND_SILENT]
+     * for none, otherwise a sound's content URI from the system picker.
+     *
+     * Not carried in a backup: a sound URI names a file on this phone, and on another it
+     * points at nothing or at a different sound.
+     */
+    val waterReminderSound: String = "",
+    /** Whether the reminder's sound repeats until the user responds to it. */
+    val waterReminderRingUntilStopped: Boolean = true,
+    /**
+     * Whether the first-run setup has been answered.
+     *
+     * False on a fresh install, and the app shows the setup screen instead of itself until
+     * it is true. Every figure the app reports is scaled by height or weight, so a screen
+     * of numbers derived from untouched defaults would look like measurements of the user
+     * while being measurements of nobody.
+     *
+     * Not carried in a backup, for the same reason the tracker switch is not: it is a
+     * property of this install, and a restore happens from inside an app already set up.
+     */
+    val setupComplete: Boolean = false,
+    /**
+     * Whether the background-access step has been put in front of the user once.
+     *
+     * Separate from [setupComplete] because it is asked after the permission prompts, and
+     * because it can be skipped: the app still counts without it, just less reliably. Once
+     * seen it is never shown again, whatever was chosen. The page behind the menu is where
+     * someone who skipped goes back to it.
+     */
+    val backgroundPromptSeen: Boolean = false,
 ) {
     companion object {
         val STEP_GOAL_RANGE = 2_000..30_000
@@ -45,10 +100,40 @@ data class UserSettings(
         val CALORIE_GOAL_RANGE = 100..2_000
         val HEART_POINT_GOAL_RANGE = 5..80
         val MOVE_MINUTE_GOAL_RANGE = 10..180
+        val WEEKLY_STEP_GOAL_RANGE = 10_000..200_000
+        val WEEKLY_HEART_POINT_GOAL_RANGE = 20..500
         val HEIGHT_RANGE = 120..220
         val WEIGHT_RANGE = 30..200
-        val CUP_SIZES_ML = listOf(100, 200, 250, 300, 400, 500)
+        val CUP_SIZES_ML = listOf(100, 150, 200, 250, 300, 350, 400, 500, 750, 1_000)
+        val DEFAULT_CUP_SIZES_ML = listOf(200, 250, 500)
+        const val CUP_COUNT = 3
+        val WATER_REMINDER_MINUTES = listOf(30, 60, 90, 120, 180)
+        const val SOUND_SILENT = "silent"
+        /** Reminder start hours: 12 am to 11 pm. */
+        val START_HOUR_RANGE = 0..23
+
+        /** Reminder end hours: 1 am up to 24, which is the end of the day, shown as 11:59 pm. */
+        val END_HOUR_RANGE = 1..24
+        val CUP_RANGE = 50..1_000
+
+        /**
+         * Returns exactly [CUP_COUNT] distinct in-range sizes, smallest first.
+         *
+         * Each size is snapped to the nearest of [CUP_SIZES_ML], duplicates dropped, and missing slots filled from
+         * [DEFAULT_CUP_SIZES_ML], so a short or odd list from storage or a backup still
+         * gives three usable buttons.
+         */
+        fun normalizeCups(sizes: List<Int>): List<Int> =
+            // Snapped to the nearest offered size, so every saved cup has a chip on the
+            // Cup sizes page and can be deselected there.
+            (sizes.map { size -> CUP_SIZES_ML.minBy { kotlin.math.abs(it - size) } } + DEFAULT_CUP_SIZES_ML + CUP_SIZES_ML)
+                .distinct()
+                .take(CUP_COUNT)
+                .sorted()
         val AGE_RANGE = 12..100
+
+        /** Long enough for any name worth greeting, short enough not to break the header. */
+        const val NAME_MAX_CHARS = 24
     }
 }
 
@@ -67,16 +152,28 @@ class UserSettingsRepository(private val context: Context) {
         val MOVE_MINUTE_GOAL = intPreferencesKey("move_minute_goal")
         val WEEKLY_STEP_GOAL = intPreferencesKey("weekly_step_goal")
         val WEEKLY_HEART_POINT_GOAL = intPreferencesKey("weekly_heart_point_goal")
-        val DEFAULT_CUP = intPreferencesKey("default_cup_ml")
+        /** Single-cup key from before three sizes. Read once as the first size, never written. */
+        val LEGACY_DEFAULT_CUP = intPreferencesKey("default_cup_ml")
+        val CUP_SIZES = stringPreferencesKey("cup_sizes_ml")
         val TRACKER_ENABLED = booleanPreferencesKey("tracker_enabled")
+        val WATER_REMINDER_ENABLED = booleanPreferencesKey("water_reminder_enabled")
+        val WATER_REMINDER_MINUTES = intPreferencesKey("water_reminder_minutes")
+        val WATER_REMINDER_START = intPreferencesKey("water_reminder_start_hour")
+        val WATER_REMINDER_END = intPreferencesKey("water_reminder_end_hour")
+        val WATER_REMINDER_SOUND = stringPreferencesKey("water_reminder_sound")
+        val WATER_REMINDER_RING = booleanPreferencesKey("water_reminder_ring_until_stopped")
         val AGE = intPreferencesKey("age")
         val SMOKER = booleanPreferencesKey("smoker")
         val SEX = stringPreferencesKey("sex")
+        val NAME = stringPreferencesKey("name")
+        val SETUP_COMPLETE = booleanPreferencesKey("setup_complete")
+        val BACKGROUND_PROMPT_SEEN = booleanPreferencesKey("background_prompt_seen")
     }
 
     val settings: Flow<UserSettings> = context.settingsStore.data.map { prefs ->
         val defaults = UserSettings()
         UserSettings(
+            name = prefs[Keys.NAME] ?: defaults.name,
             heightCm = prefs[Keys.HEIGHT] ?: defaults.heightCm,
             weightKg = prefs[Keys.WEIGHT] ?: defaults.weightKg,
             stepGoal = prefs[Keys.STEP_GOAL] ?: defaults.stepGoal,
@@ -86,11 +183,37 @@ class UserSettingsRepository(private val context: Context) {
             moveMinuteGoal = prefs[Keys.MOVE_MINUTE_GOAL] ?: defaults.moveMinuteGoal,
             weeklyStepGoal = prefs[Keys.WEEKLY_STEP_GOAL] ?: defaults.weeklyStepGoal,
             weeklyHeartPointGoal = prefs[Keys.WEEKLY_HEART_POINT_GOAL] ?: defaults.weeklyHeartPointGoal,
-            defaultCupMl = prefs[Keys.DEFAULT_CUP] ?: defaults.defaultCupMl,
+            cupSizesMl = prefs[Keys.CUP_SIZES]?.let(::parseCups)
+                ?: prefs[Keys.LEGACY_DEFAULT_CUP]?.let { UserSettings.normalizeCups(listOf(it, 500)) }
+                ?: defaults.cupSizesMl,
             trackerEnabled = prefs[Keys.TRACKER_ENABLED] ?: defaults.trackerEnabled,
+            waterReminderEnabled = prefs[Keys.WATER_REMINDER_ENABLED] ?: defaults.waterReminderEnabled,
+            waterReminderMinutes = prefs[Keys.WATER_REMINDER_MINUTES]?.let(::validReminderMinutes)
+                ?: defaults.waterReminderMinutes,
+            waterReminderStartHour = prefs[Keys.WATER_REMINDER_START]?.coerceIn(UserSettings.START_HOUR_RANGE)
+                ?: defaults.waterReminderStartHour,
+            waterReminderEndHour = prefs[Keys.WATER_REMINDER_END]?.coerceIn(UserSettings.END_HOUR_RANGE)
+                ?: defaults.waterReminderEndHour,
+            waterReminderSound = prefs[Keys.WATER_REMINDER_SOUND] ?: defaults.waterReminderSound,
+            waterReminderRingUntilStopped = prefs[Keys.WATER_REMINDER_RING] ?: defaults.waterReminderRingUntilStopped,
             age = prefs[Keys.AGE] ?: defaults.age,
             smoker = prefs[Keys.SMOKER] ?: defaults.smoker,
             sex = prefs[Keys.SEX]?.let { runCatching { Sex.valueOf(it) }.getOrNull() } ?: defaults.sex,
+            // Absent on an install that predates the setup screen. Such a phone has
+            // already been through About you if it ever wrote a body measurement, so it
+            // is treated as set up rather than walled behind questions it answered long
+            // ago. A genuinely fresh install has written neither key.
+            setupComplete = prefs[Keys.SETUP_COMPLETE]
+                ?: (prefs[Keys.HEIGHT] != null || prefs[Keys.WEIGHT] != null),
+            // Counted as seen only by an install that predates the setup screen: it has
+            // been running for a while and should not be walled behind a question it never
+            // had the chance to answer. A phone that has just been through setup has not
+            // seen it, and setup writes height and weight, so those cannot be the test.
+            backgroundPromptSeen = prefs[Keys.BACKGROUND_PROMPT_SEEN]
+                ?: (
+                    prefs[Keys.SETUP_COMPLETE] == null &&
+                        (prefs[Keys.HEIGHT] != null || prefs[Keys.WEIGHT] != null)
+                    ),
         )
     }
 
@@ -113,14 +236,71 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.CALORIE_GOAL] = value.calorieGoal.coerceIn(UserSettings.CALORIE_GOAL_RANGE)
             prefs[Keys.HEART_POINT_GOAL] = value.heartPointGoal.coerceIn(UserSettings.HEART_POINT_GOAL_RANGE)
             prefs[Keys.MOVE_MINUTE_GOAL] = value.moveMinuteGoal.coerceIn(UserSettings.MOVE_MINUTE_GOAL_RANGE)
-            prefs[Keys.WEEKLY_STEP_GOAL] = value.weeklyStepGoal.coerceAtLeast(1)
-            prefs[Keys.WEEKLY_HEART_POINT_GOAL] = value.weeklyHeartPointGoal.coerceAtLeast(1)
-            prefs[Keys.DEFAULT_CUP] = value.defaultCupMl.coerceIn(50, 1_000)
+            prefs[Keys.WEEKLY_STEP_GOAL] = value.weeklyStepGoal.coerceIn(UserSettings.WEEKLY_STEP_GOAL_RANGE)
+            prefs[Keys.WEEKLY_HEART_POINT_GOAL] =
+                value.weeklyHeartPointGoal.coerceIn(UserSettings.WEEKLY_HEART_POINT_GOAL_RANGE)
+            prefs[Keys.CUP_SIZES] = formatCups(value.cupSizesMl)
             prefs[Keys.AGE] = value.age.coerceIn(UserSettings.AGE_RANGE)
             prefs[Keys.SMOKER] = value.smoker
             prefs[Keys.SEX] = value.sex.name
+            prefs[Keys.NAME] = cleanName(value.name)
+            prefs[Keys.WATER_REMINDER_ENABLED] = value.waterReminderEnabled
+            prefs[Keys.WATER_REMINDER_MINUTES] = validReminderMinutes(value.waterReminderMinutes)
+            prefs[Keys.WATER_REMINDER_START] = value.waterReminderStartHour.coerceIn(UserSettings.START_HOUR_RANGE)
+            prefs[Keys.WATER_REMINDER_END] = value.waterReminderEndHour.coerceIn(UserSettings.END_HOUR_RANGE)
+            prefs[Keys.WATER_REMINDER_RING] = value.waterReminderRingUntilStopped
         }
     }
+
+    suspend fun setName(value: String) {
+        context.settingsStore.edit { it[Keys.NAME] = cleanName(value) }
+    }
+
+    /**
+     * Opens the app without asking the questions, for a restore that answered them.
+     *
+     * The body measurements are already written by the restore itself, so this only lifts
+     * the gate.
+     */
+    suspend fun markBackgroundPromptSeen() {
+        context.settingsStore.edit { it[Keys.BACKGROUND_PROMPT_SEEN] = true }
+    }
+
+    suspend fun markSetupComplete() {
+        context.settingsStore.edit { it[Keys.SETUP_COMPLETE] = true }
+    }
+
+    /**
+     * Writes the first-run answers and opens the app, in one edit.
+     *
+     * One edit rather than five, so a process death midway cannot leave the app unlocked
+     * with only half the body measurements it was unlocked for.
+     */
+    suspend fun completeSetup(
+        name: String,
+        heightCm: Int,
+        weightKg: Int,
+        age: Int,
+        sex: Sex,
+    ) {
+        context.settingsStore.edit { prefs ->
+            prefs[Keys.NAME] = cleanName(name)
+            prefs[Keys.HEIGHT] = heightCm.coerceIn(UserSettings.HEIGHT_RANGE)
+            prefs[Keys.WEIGHT] = weightKg.coerceIn(UserSettings.WEIGHT_RANGE)
+            prefs[Keys.AGE] = age.coerceIn(UserSettings.AGE_RANGE)
+            prefs[Keys.SEX] = sex.name
+            prefs[Keys.SETUP_COMPLETE] = true
+        }
+    }
+
+    /**
+     * Trimmed and capped, so a stray paste cannot push the greeting off the header.
+     *
+     * Line breaks become spaces rather than being stripped: a name pasted from a form may
+     * carry one, and dropping it would join two words that were never one.
+     */
+    private fun cleanName(value: String): String =
+        value.replace(Regex("\\s+"), " ").trim().take(UserSettings.NAME_MAX_CHARS)
 
     suspend fun setHeightCm(value: Int) = putInt(Keys.HEIGHT, value.coerceIn(UserSettings.HEIGHT_RANGE))
     suspend fun setWeightKg(value: Int) = putInt(Keys.WEIGHT, value.coerceIn(UserSettings.WEIGHT_RANGE))
@@ -134,9 +314,18 @@ class UserSettingsRepository(private val context: Context) {
     suspend fun setMoveMinuteGoal(value: Int) =
         putInt(Keys.MOVE_MINUTE_GOAL, value.coerceIn(UserSettings.MOVE_MINUTE_GOAL_RANGE))
 
-    suspend fun setWeeklyStepGoal(value: Int) = putInt(Keys.WEEKLY_STEP_GOAL, value.coerceAtLeast(1))
-    suspend fun setWeeklyHeartPointGoal(value: Int) = putInt(Keys.WEEKLY_HEART_POINT_GOAL, value.coerceAtLeast(1))
-    suspend fun setDefaultCup(value: Int) = putInt(Keys.DEFAULT_CUP, value.coerceIn(50, 1_000))
+    suspend fun setWeeklyStepGoal(value: Int) =
+        putInt(Keys.WEEKLY_STEP_GOAL, value.coerceIn(UserSettings.WEEKLY_STEP_GOAL_RANGE))
+    suspend fun setWeeklyHeartPointGoal(value: Int) =
+        putInt(Keys.WEEKLY_HEART_POINT_GOAL, value.coerceIn(UserSettings.WEEKLY_HEART_POINT_GOAL_RANGE))
+    suspend fun setCupSizes(value: List<Int>) {
+        context.settingsStore.edit { it[Keys.CUP_SIZES] = formatCups(value) }
+    }
+
+    private fun parseCups(stored: String): List<Int> =
+        UserSettings.normalizeCups(stored.split(',').mapNotNull { it.trim().toIntOrNull() })
+
+    private fun formatCups(sizes: List<Int>): String = UserSettings.normalizeCups(sizes).joinToString(",")
 
     suspend fun setAge(value: Int) = putInt(Keys.AGE, value.coerceIn(UserSettings.AGE_RANGE))
 
@@ -147,6 +336,41 @@ class UserSettingsRepository(private val context: Context) {
     suspend fun setSmoker(value: Boolean) {
         context.settingsStore.edit { it[Keys.SMOKER] = value }
     }
+
+    suspend fun setWaterReminderEnabled(value: Boolean) {
+        context.settingsStore.edit { it[Keys.WATER_REMINDER_ENABLED] = value }
+    }
+
+    suspend fun setWaterReminderMinutes(value: Int) {
+        context.settingsStore.edit { it[Keys.WATER_REMINDER_MINUTES] = validReminderMinutes(value) }
+    }
+
+    suspend fun setWaterReminderRing(value: Boolean) {
+        context.settingsStore.edit { it[Keys.WATER_REMINDER_RING] = value }
+    }
+
+    suspend fun setWaterReminderSound(value: String) {
+        context.settingsStore.edit { it[Keys.WATER_REMINDER_SOUND] = value }
+    }
+
+    /**
+     * Saves the reminder hours. Equal hours would read as all day, which is not what someone
+     * dragging one slider onto the other means; 12 am to 11:59 pm already says all day, so an
+     * equal pair keeps a one-hour window instead.
+     */
+    suspend fun setWaterReminderHours(startHour: Int, endHour: Int) {
+        val start = startHour.coerceIn(UserSettings.START_HOUR_RANGE)
+        var end = endHour.coerceIn(UserSettings.END_HOUR_RANGE)
+        if (end == start) end = (start + 1).coerceAtMost(UserSettings.END_HOUR_RANGE.last)
+        context.settingsStore.edit {
+            it[Keys.WATER_REMINDER_START] = start
+            it[Keys.WATER_REMINDER_END] = end
+        }
+    }
+
+    /** One of the offered intervals, the nearest when [value] is not one of them. */
+    private fun validReminderMinutes(value: Int): Int =
+        UserSettings.WATER_REMINDER_MINUTES.minBy { kotlin.math.abs(it - value) }
 
     suspend fun setTrackerEnabled(value: Boolean) {
         context.settingsStore.edit { it[Keys.TRACKER_ENABLED] = value }

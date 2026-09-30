@@ -26,7 +26,7 @@ class BackupRestoreTest {
     private val settings = UserSettings(heightCm = 179, weightKg = 75, age = 34, sex = Sex.MALE, stepGoal = 12_000)
 
     private fun roundTrip(): Backup.Snapshot =
-        Backup.fromJson(Backup.toJson(days, hours, water, settings), UserSettings())
+        Backup.fromJson(Backup.toJson(days, hours, water, emptyList(), settings), UserSettings())
 
     @Test
     fun `a file written by this build reads back unchanged`() {
@@ -54,7 +54,7 @@ class BackupRestoreTest {
         // Whether this phone is counting is a property of the phone, not of the backup, so
         // the writer never emits it and a restore must not reset it.
         val current = UserSettings(trackerEnabled = false)
-        val restored = Backup.fromJson(Backup.toJson(days, hours, water, settings), current)
+        val restored = Backup.fromJson(Backup.toJson(days, hours, water, emptyList(), settings), current)
 
         assertEquals(false, restored.settings.trackerEnabled)
     }
@@ -62,7 +62,7 @@ class BackupRestoreTest {
     @Test
     fun `sex survives the round trip, because the resting burn estimate needs it`() {
         val restored = Backup.fromJson(
-            Backup.toJson(days, hours, water, settings),
+            Backup.toJson(days, hours, water, emptyList(), settings),
             UserSettings(sex = Sex.UNSPECIFIED),
         )
 

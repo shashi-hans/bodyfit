@@ -3,12 +3,24 @@
 
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <!-- Used only while a running or cycling session is open, to measure speed. No
-         coordinate is stored, and a refusal falls back to an assumed effort. -->
+         coordinate is stored, and a refusal falls back to an assumed effort.
+         Coarse is declared alongside fine because Android 12 and later offer the user a
+         Precise/Approximate choice: asking for fine alone leaves the approximate answer
+         granting nothing, so a user who picks it gets neither speed nor an explanation.
+         Speed still needs fine, so approximate falls back to the assumed effort. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <!-- Install-time, no prompt. Lets the exercise session keep reading GPS with the screen
+         off, and only while a session's notification is showing. The runtime location
+         permission is still asked only when a running or cycling session starts. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Held only while an exercise session runs, so its clock and jump count continue with
+         the screen off. Install-time, no prompt. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Declared but not required, so the listing stays downloadable on every device. The
          app checks for the sensor at launch instead, and says plainly why it cannot run
@@ -26,6 +38,7 @@
     <application
         android:name=".BodyFitApp"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
@@ -48,8 +61,17 @@
             android:exported="false"
             android:foregroundServiceType="health" />
 
+        <service
+            android:name=".sensor.ExerciseSessionService"
+            android:exported="false"
+            android:foregroundServiceType="location|health|shortService" />
+
         <receiver
             android:name=".notification.WaterActionReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".notification.WaterReminderDismissReceiver"
             android:exported="false" />
 
         <receiver

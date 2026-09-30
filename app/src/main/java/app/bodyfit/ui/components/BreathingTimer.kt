@@ -143,13 +143,7 @@ fun BreathingDialog(onDismiss: () -> Unit, secondsPerPhase: Int = 4) {
 /** The entry point on the Today screen. */
 @Composable
 fun BreathingCard(onStart: () -> Unit, modifier: Modifier = Modifier) {
-    androidx.compose.material3.Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
-    ) {
+    SectionCard(modifier = modifier, corner = 20.dp) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "🧘 Take a minute",

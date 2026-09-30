@@ -11,19 +11,71 @@ network client and no analytics in the app.
 
 | Tab | What it holds |
 | --- | --- |
-| 🏠 Today | App name and greeting across the top, then the day's figures on the left beside their icons, each printed in its own colour, with three nested rings on the right, then water beside its add buttons, a box holding distance and move minutes, and a second holding BMI and wellbeing that opens their working |
+| 🏠 Today | "Hi, <name>" and the greeting down the left of the top row beside the menu, the app mark and name on the right, then four nested arcs over the day's six figures, three to a row, each beside its icon and printed in its own colour, then the water add buttons, and a box holding BMI and wellbeing that opens their working |
 | 💧 Water | Fill-level glass, quick-add sizes, today's log with per-entry undo |
 | 🏋️ Exercise | Box breathing, running, cycling and skipping, and today's logged sessions |
-| 📈 Trends | One metric at a time over Day, Week or Month. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Arrows step back and forward a span at a time, back only as far as there is data. Tapping a bar in Week or Month opens that day hour by hour |
+| 📈 Trends | One metric at a time over Day, Week or Month, with the day's logged exercise under the chart. Day draws the 24 hours of today; Week is the calendar week starting Monday and Month the calendar month, both a bar per day. Each span carries its own target, average, best slot and a table of the same numbers. Arrows step back and forward a span at a time, back only as far as there is data. Tapping a bar in Week or Month opens that day hour by hour |
 | 🎯 Goals | Daily goals for steps, calories, water, heart points and move minutes, a Recommendation button opening the suggested set, and weekly targets |
 
 BMI and wellbeing open a page of their own from the Today screen, showing the score, the
 band and the arithmetic line by line. It explains two standings rather than reporting the
 day, so it is read occasionally and does not hold a place in the bar.
 
-Everything that is not a goal sits behind the menu on the Today screen: About you, default
-cup size, lock screen card, how the numbers work, backup, and about. Each is a page with a
-back arrow, so no subject has two homes.
+## First run
+
+A fresh install opens on a setup screen rather than on the app, and the tracker does not
+start until it is answered. Every figure the app reports is scaled by height or weight, so
+opening straight into the tabs would show a full screen of numbers computed from untouched
+defaults: they look like measurements of the user while being measurements of nobody.
+
+Each measurement has to be moved before the button enables. A slider already sitting on a
+plausible default cannot tell "this is my height" apart from "I did not read this screen".
+Sex has no preselected chip for the same reason: "Prefer not to say" is an answer the user
+picks, not a value they fail to change. The name is the one optional field, because nothing
+is calculated from it.
+
+The permission prompt waits for the answers too. Asking to read the step counter over a
+screen that has not yet said why the app wants it is how a refusal is earned.
+
+An install that predates this screen is not walled behind it. The flag is absent there, so
+it falls back to whether a body measurement was ever written, which an existing user has
+done through About you.
+
+About you holds a name alongside the body measurements. It is optional, never leaves the
+phone and is never part of a figure; the Today header greets "Hi, Guest" without one. The
+field draws its own text once typing starts rather than the value read back from DataStore,
+because a write completes after the next keystroke has arrived and a field fed by the stored
+value receives characters out of order: "Shashi" lands as "ahS".
+
+Everything that is not a goal sits behind the menu on the Today screen: About you, cup
+sizes, lock screen card, how the numbers work, backup, and about. Each is a page with a
+back arrow, so no subject has two homes. Cup sizes holds three picks (200, 250 and 500 ml by
+default); they are the water buttons on Today and on the lock screen card, which Android caps
+at three actions.
+
+Water reminders are off until switched on, and repeat every 30 minutes to 3 hours. A
+WorkManager job checks at that interval and posts a reminder with the three cup sizes as
+buttons, but only inside the hours the user sets (08:00 to 22:00 by default, any hour from
+12:00 am up to 11:59 pm; a start later than the end runs overnight, equal hours mean all day), only while the day's goal is not met,
+and only when no drink was logged within the interval. Swiping a reminder away schedules it
+to ring again in 15 minutes, and that check skips it when a drink was logged since the
+dismissal. The swipe is heard through the notification's delete intent, which Android fires
+only for a user dismissal, so a cup tap or the app cancelling it never snoozes.
+
+The reminder's sound is picked through Android's own sound picker (notification sounds,
+ringtones and alarms, plus Default and Silent), and a test button posts a reminder at once so
+the choice can be heard. Android fixes a channel's sound when the channel is created, so each
+sound gets its own channel id and the previous one is deleted; only one "Water reminders"
+channel ever shows in the phone's settings. The sound URI is not carried in a backup, because
+it names a file on this phone. By default the reminder keeps ringing until the user responds: the notification
+carries `FLAG_INSISTENT`, so Android repeats the sound until a cup is tapped, the reminder is
+swiped away or the shade is opened, and its channel is high importance so it drops down over
+the screen with the cup buttons while it rings. A switch returns it to a single sound. Do Not
+Disturb still silences it; ringing through that would need a full-screen alarm, which Play
+limits to alarm and calling apps. WorkManager rather than exact alarms: a
+reminder a few minutes late costs nothing, and exact alarms need a permission Play reviews.
+The notification permission is asked when the switch is turned on. Tapping a cup logs the
+drink and dismisses the reminder.
 
 ## Exercise
 
@@ -31,9 +83,17 @@ Box breathing, running, cycling and skipping, reached from a button on Today. Br
 a guided minute that records nothing. The other three run a timer and log a session.
 
 A saved session writes an `exercise_session` row and folds its minutes, calories and heart
-points into the day, so the Today goals count exercise the step sensor cannot see. Sessions
-are kept as rows as well as folded in because a calorie figure with no explanation is not
-checkable: a user who sees 300 kcal appear should be able to find the ride that caused it.
+points into the day and into the hour it started, so the Today goals count exercise the step
+sensor cannot see and the Day trend draws the run in the hour it happened. Without the hourly
+half the day total and the 24 bars under it would add up to different numbers. The whole
+session is billed to its starting hour rather than split across the hours it spanned: a
+session is minutes, not hours, and splitting it would invent a precision the row does not
+carry. Trends lists the day's sessions under the chart, so a bar no step count can explain
+is readable.
+
+Sessions are kept as rows as well as folded in because a calorie figure with no explanation
+is not checkable: a user who sees 300 kcal appear should be able to find the ride that
+caused it.
 Removing a session takes its contribution back off the day.
 
 | Activity | Produces steps | Effort |
@@ -60,17 +120,50 @@ which is in force.
 
 No coordinate is stored. Fixes are consumed for distance and dropped, and the session row
 holds duration, distance and calories: how far and how fast, never where. A route trace is
-a different category of data from a step count, and the app does not hold one.
+a different category of data from a step count, and the app does not hold one. Pace is
+derived from the stored distance and moving time rather than stored itself, so the two
+cannot disagree. A session that measured nothing carries 0 metres, and its row prints no
+distance at all rather than a misleading zero.
 
 Fixes worse than 35 m of accuracy are ignored, and a hop implying more than 80 km/h is
 treated as two bad fixes rather than a sprint. Location is requested when a running or
 cycling session starts rather than at launch, so the reason is on screen when the prompt
 appears, and a refusal starts the session anyway on the assumed effort.
 
+The session is timed by `ExerciseSessionService`, a foreground service of type
+`location|health`, not by the screen. A screen-owned timer lost while-in-use location the
+moment the phone locked in a pocket, and the run came out short. The service holds the
+clock, the jump counter and GPS for exactly as long as its "in progress" notification shows,
+so the session also survives a rotation. A partial wake lock, bounded at six hours, keeps the clock and the accelerometer running with the screen off; the moving time is added up on the monotonic clock. The service also owns the session flag that pauses the step tracker's scoring: it sets the flag once it is running and clears it when it ends, and the step tracker clears any flag it finds with no live session behind it. `FOREGROUND_SERVICE_LOCATION` is an install-time
+permission with no prompt; `ACCESS_BACKGROUND_LOCATION` is not requested.
+
 Every session is paused automatically whenever the phone stops moving for three seconds,
 and only time spent moving is billed. Waiting at a crossing is not exercise. Three seconds
 rather than one because the top of a jump is briefly weightless and would otherwise read
 as a stop.
+
+### Scoring a window that outlived its minute
+
+Every figure a window earns scales with the minutes it represents, not with the one minute
+it was meant to be. That matters because a window does not always get closed on time. A
+process the system freezes leaves one open for as long as the freeze lasts, and a service
+restarted after a kill reads the whole gap out of the cumulative step counter and banks it
+in a single go.
+
+Awarding one move minute and at most two heart points per window, whatever its length, is
+what made a frozen phone report a fraction of the walking it had counted. The steps came
+back, because the hardware counter is cumulative; the minutes they were worth did not. A
+Realme running Oplus's app-freezing framework showed 12,269 steps against 45 move minutes,
+which is 273 steps a minute, while the same walk on a Xiaomi gave 146.
+
+Past `MAX_HUMAN_CADENCE`, 220 steps a minute, the elapsed time is not believable: sustained
+running sits near 180 and a sprinter's peak near 250. The duration is then inferred from the
+steps at `RECOVERY_CADENCE`, a moderate 100 a minute. Those minutes and their energy cost
+stand, but they earn no heart points, because a heart point is a claim about intensity and
+intensity is exactly what was not observed.
+
+The scoring lives in `Metrics.scoreWindow` rather than in the service, so it is a pure
+function of steps, elapsed time and body measurements, and is tested against both failures.
 
 While a session runs the tracker still counts steps but stops scoring its 60-second
 windows. Without that a run would be billed twice, once through its steps and once through
@@ -203,36 +296,53 @@ Rows older than 90 days are pruned on the day rollover, which keeps the table at
 
 ## Chart colors
 
-The Today card carries the day's figures on the left and three nested rings on the right:
-steps green, calories yellow, heart points red. Each figure sits beside its own mark,
-footprints, the fire emoji and a heart, and is printed in its ring's colour so the two pair
-without counting inwards from the outside. The figure is bare and the line under it carries
-the unit: at this size "3,768 steps" costs the width the three rings need, and printing the
-unit twice buys nothing.
+The Today card carries four nested half-circle arcs across the top and six figures
+underneath, three to a row. The arcs are steps yellow, calories red, heart points green and
+water blue; move minutes is cyan and distance violet, printed as figures with no arc, because
+distance is steps counted a second way and move minutes track the same walking, so either
+curve would retrace the steps arc. Cyan and violet replaced a green and a pink that sat next
+to heart points and calories in the grid and read as the same measurement twice.
 
-A circle's perimeter is uniform, so a given share of the goal is always the same length of
-arc. The shapes tried before this could not manage that. A heart traced by a band has an
-uneven perimeter, and emblems filling from the bottom have an uneven area: a heart is
-narrow at its point and wide at its lobes, so filling half its height covers well under
-half its ink, while a flame does the reverse. Three metrics at the same percentage looked
-different on each. The icons stay, beside the figures, carrying identity without also being
+The well the arcs enclose holds the day's activity calories, which is the largest clear area
+on the card and so carries the number worth reading first. Its info button sits above the
+figure rather than under it: the well is read top down, and a button under the caption sat
+closer to the figures below than to the number it belongs to.
+
+The three columns of figures are aligned to the arc above them, the first flush left, the
+last flush right and the middle centred, so the block reads as one shape with the arcs
+instead of as a second grid stacked under them. The calorie figure in the grid is
+the whole day's burn, activity plus the resting energy the day has accrued, prorated from
+Mifflin-St Jeor across the hours elapsed. Two numbers rather than one because they answer
+different questions: the goal is an activity target, and the total is what another tracker
+would call "calories". Three round buttons open what a figure is made of: the total says what it counts and why the
+goal is not scored against it, and the activity calories and heart points each break down
+into walking and one line per logged session. The walking share is the day's total less the
+sessions rather than a figure of its own, so the lines always add up to the number on the
+card. The buttons are filled circles rather than bare glyphs, because a plain icon beside a
+number reads as part of the label. Resting burn is prorated straight-line through the day; it is not
+actually flat, being lower asleep and higher after a meal, but nothing here measures either. Each figure sits beside its own mark and is printed in its own colour,
+so a figure and its arc pair without counting inwards from the outside. The figure is bare
+and the line under it carries the unit: at this size "3,768 steps" costs the width a second
+figure needs, and printing the unit twice buys nothing.
+
+Half a circle rather than a whole one so the arcs take a band the width of the card instead
+of a disc beside the figures, which leaves the figures the full width and room to stay large
+at six of them. An arc's length is uniform along its sweep, so a given share of the goal is
+always the same run of ink. The shapes tried before this could not manage that. A heart
+traced by a band has an uneven perimeter, and emblems filling from the bottom have an uneven
+area: a heart is narrow at its point and wide at its lobes, so filling half its height covers
+well under half its ink, while a flame does the reverse. The same percentage looked different
+on each metric. The icons stay, beside the figures, carrying identity without also being
 asked to carry measurement.
 
-The figures are printed in text-safe shades of the three hues rather than the hues
-themselves. A colour that passes as a mark need not pass as a figure: measured against the
-card, the mark colours give 1.90:1 for calories in light and 3.45:1 for steps in dark, well
-under the 4.5:1 body text needs. The text variants clear 5:1 in both themes. The outline means an empty heart still reads as its metric
-rather than as a grey blank, and the goal gives the fill level a scale to be read against.
+Six hues at once is still past what colour alone can separate, even after the cyan and
+violet. Identity therefore rests on the emoji and the number under each arc, and colour
+carries nothing on its own.
 
-Three nested bands round one outline came first and were dropped: a share of the goal is
-read as a position along a curve, which is far harder than a fill level, and the bands
-crowded together where the shape narrows to its point. The outline is the usual
-`x = 16 sin^3 t` parametric, sampled into a path; its extent is computed from the samples
-rather than assumed, because the lobes peak near y = 11.9 and a height guessed from the
-formula's value at t = 0 clips them.
-Water, distance and move minutes are neutral cards there, and take their own hue only
-where they are the single colored thing on screen: the water glass on its own tab, and
-the weekly chart, which draws one metric at a time.
+The figures are printed in text-safe shades of the six hues rather than the hues themselves.
+A colour that passes as a mark need not pass as a figure: measured against the card, the mark
+colours give 1.90:1 for the yellow in light and 3.45:1 for the green in dark, well under the
+4.5:1 body text needs. The text variants clear 5:1 in both themes.
 
 Marks shown together must stay apart for colorblind readers, and yellow, red and green
 are the hardest set for that. The dark steps are therefore not the light hues dimmed:
@@ -270,7 +380,7 @@ testable without a database or a clock.
 
 | Number | Rule |
 | --- | --- |
-| Wellbeing score | 100 adjusted for BMI band, 14-day average steps, age and smoking |
+| Wellbeing score | 100 adjusted for BMI band, average steps over the 13 full days before today (days before the first record left out), age and smoking |
 | Recommended goals | Steps by age band (10,000 under 40, 8,500 to 59, 7,000 from 60); heart points and move minutes from the WHO's 150 moderate minutes a week; water at 35 ml/kg with an EFSA floor of 2.0 L for men and 1.6 L for women; calories from the recommended steps costed through the tracker's own MET model |
 | Resting burn | Mifflin-St Jeor from weight, height, age and sex. Unspecified sex takes the midpoint of the two sex terms, wrong by about 83 kcal either way |
 
@@ -289,9 +399,18 @@ the word itself is always present: colour is a second encoding, never the only o
 three status colours are kept apart from the metric hues and are never reused as a data
 series.
 
-The wellbeing score is indicative. It is not a medical assessment and not an underwriting
-decision, and the screen showing it says so. Age, sex and smoking are optional and stay on
-the device.
+Every figure the app shows is an estimate, produced on the phone from sensor readings and
+published population averages rather than measured clinically. One wording says so, held in
+`ui/components/Disclaimer.kt` and used by every screen that has to state where its numbers
+stand: the app is a wellness tool, not a medical device, and nothing in it is intended to
+diagnose, treat, cure or prevent any condition. Separate copies of that claim would drift,
+and a page saying "estimate" beside one saying "measured" tells the user the app disagrees
+with itself about its own accuracy.
+
+The full statement carries on the pages with room for it, How the numbers work and About.
+Shorter screens and dialogs carry a one-line form of the same claim. The wellbeing score
+adds that it is neither a medical assessment nor an underwriting decision. Age, sex and
+smoking are optional and stay on the device.
 
 ## Backup
 
@@ -310,25 +429,67 @@ backup never erases newer tracking. Water entries and hourly rows for a restored
 replaced rather than appended, so restoring the same file twice cannot double a total. The
 tracker switch is not restored: whether this phone is counting is a property of the phone.
 
-### Weekly backup
+### Daily backup
 
-The backup page can also write on a schedule. The user picks a file once, the app takes
-persistable URI permission on it, and a WorkManager job rewrites that same file every week.
-The grant has to be persisted or the first scheduled run a day later fails with a security
-error nobody is present to see.
+The backup runs on a schedule from the moment the app is installed, with nothing to switch
+on. A WorkManager job rewrites `Download/backup/bodyfit-backup.json` every day.
+
+One file, never a second one, and never opened for writing in place. Each run writes into a
+new pending row named `bodyfit-backup (writing).json`, and only once that is complete deletes
+the old row and renames the new one. A full disk or a killed process mid-write therefore
+leaves the previous backup whole, which matters because it is the only copy. The row is
+remembered in the backup's own settings, and the liveness check on it is a query rather than
+an open. After each write the app deletes any numbered copies it still owns in
+`Download/backup`, matched by that exact folder so a folder such as `Download/backup-old` is
+never touched. Android 9 and older write a temporary file beside the old one and rename it
+over.
+
+The one case beyond reach is a reinstall or a cleared app. Ownership of the old row is gone
+with the old install, and reading another owner's row needs All files access, which Play
+grants to file managers and little else. The app writes a fresh file and the previous one
+stays until the user deletes it.
+
+Daily rather than weekly because the file is the only copy: nothing syncs, so the gap between
+the last backup and a lost phone is the history that is gone. One rewrite of one file a day
+costs nothing measurable and cuts that gap from seven days to one. The cadence is not in the
+filename, and was once: moving from weekly to daily then meant either a lie in the name or an
+orphaned file on every phone.
+
+That folder rather than the app's own is so the file survives an uninstall and a file
+manager can copy it off the phone. Android 10 onwards an app cannot create a folder at the
+root of shared storage, so the write goes through MediaStore's Downloads collection, which
+needs no permission and no prompt. The cost of sitting outside the app is that any app granted storage access can read
+it, and the file holds the whole history. The page says so.
+
+"Choose a file" points the schedule anywhere else instead. The app takes persistable URI
+permission on what the user picks, or the first scheduled run a day later fails with a
+security error nobody is present to see.
 
 One file is overwritten rather than a new one written each time, so a year does not leave
 52 copies on a drive. The stream is opened in `wt` mode: without truncation a shorter
 backup would leave the tail of the previous one behind and produce a file that is not valid
-JSON.
+JSON. That file is still rewritten in place: a document picked through the system dialog
+cannot be replaced atomically on every provider.
 
 The job waits for the battery not to be low, so a write can land a few hours late. It is
 re-asserted on every launch, because an app update or a force stop can drop the schedule
-and a weekly backup that quietly stopped is worse than one that never existed. A revoked
+and a daily backup that quietly stopped is worse than one that never existed. A revoked
 or deleted file is recorded and shown on the page rather than retried forever.
 
-`format` is 2. A version 1 file still restores; it simply carries no hourly rows, and the
-Day trend draws those days as empty. A file written by a newer format is refused outright
+`format` is 3. Older files still restore: a version 1 file carries no hourly rows and a
+version 2 file no exercise sessions, and the screens draw the missing detail as empty rather
+than as a gap.
+
+Sessions are carried as well as the day totals they were folded into, because a calorie
+figure with no explanation is not checkable: a restored day showing 300 kcal should still be
+able to name the ride that caused it. They are written back as rows only and never re-folded
+into the day, since the day rows in the file already include them and folding again would
+count every session twice.
+
+A restore is also the second way through first-run setup. A backup carries the same height,
+weight, age and sex the setup screen asks for, so a user moving from another phone answers
+the questions by restoring rather than typing them again and hoping they match what the file
+is about to overwrite. Only a restore that actually parsed opens the app. A file written by a newer format is refused outright
 rather than half read.
 
 ## The current day

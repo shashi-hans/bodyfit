@@ -21,6 +21,8 @@ Body Fit stores the following on your device:
 - **Height, weight, age, sex and whether you smoke**, if you enter them. These are optional
   and are used only to calculate BMI, stride length, calorie estimates and the indicative
   wellbeing score.
+- **Your name**, if you enter one. It is optional, is used only to greet you on the Today
+  screen, and is never part of any calculation. Leaving it blank changes nothing else.
 - **Your goals and app settings.**
 
 ## Where it is stored
@@ -32,7 +34,12 @@ Android prevents other apps from reading them.
 
 If you start a running or cycling session and allow it, the app reads your location while
 that session is open, to work out how fast you are going. It is used to pick an effort
-level and is then discarded.
+level and is then discarded. The app asks for location only at that moment, never at
+install or launch.
+
+While a session runs, a notification shows that it is in progress, and the app keeps reading
+location with the screen off until you stop the session. When no session is running, the app
+does not read location at all, in the foreground or the background.
 
 **No coordinate is saved.** The session records how long you exercised, how far you went
 and the calories estimated from that. It does not record where you were, and the app holds
@@ -49,8 +56,9 @@ Nothing, including your location.
 The app declares no internet permission, so it is technically incapable of sending your
 data anywhere. It contains no network code, no analytics library and no crash reporting.
 
-Android's own automatic backup is switched off (`allowBackup="false"`), so your health data
-is not copied to your Google account either.
+Android's own automatic backup and phone-to-phone transfer are both switched off, so your
+health data is not copied to your Google account or to a new phone unless you move a backup
+file yourself.
 
 ## Sharing
 
@@ -75,7 +83,8 @@ no account to close.
 | --- | --- |
 | Physical activity (`ACTIVITY_RECOGNITION`) | Android requires it to read the step counter. Without it no steps can be counted. |
 | Notifications (`POST_NOTIFICATIONS`) | To show the lock-screen card with your daily totals. |
-| Foreground service (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH`) | To keep counting steps while the app is closed. Android requires a visible notification for this. |
+| Foreground service (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH`, `FOREGROUND_SERVICE_LOCATION`) | To keep counting steps while the app is closed, and to keep timing an exercise session you started with the screen off. Android requires a visible notification for each. |
+| Wake lock (`WAKE_LOCK`) | Held only while an exercise session runs, so its clock keeps going with the screen off. |
 | Run at startup (`RECEIVE_BOOT_COMPLETED`) | To resume counting after you restart your phone. |
 | Location (`ACCESS_FINE_LOCATION`) | To measure speed during a running or cycling session you started. Optional, used only while that session is open, and no coordinate is stored. |
 
@@ -87,9 +96,14 @@ Body Fit is not directed at children and collects nothing from anyone, including
 
 ## Health information
 
-The wellbeing score and BMI shown in the app are indicative only. They are not a medical
-assessment, not a diagnosis, and not an input to any insurance or underwriting decision.
-Consult a qualified professional about your health.
+Body Fit is a wellness tool, not a medical device. Every figure it shows, including steps,
+calories, heart points, distance, BMI and the wellbeing score, is an estimate produced on the
+phone from sensor readings and published population averages rather than measured clinically.
+Read the numbers as a guide to your own trends over time, not as a reading of your health.
+
+Nothing in the app is intended to diagnose, treat, cure or prevent any condition, and nothing
+in it is an input to any insurance or underwriting decision. Speak to a qualified clinician
+about any symptom or health decision that concerns you.
 
 ## Changes to this policy
 

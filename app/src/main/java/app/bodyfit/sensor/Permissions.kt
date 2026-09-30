@@ -2,11 +2,15 @@ package app.bodyfit.sensor
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.os.Build
+import android.os.PowerManager
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 /**
@@ -63,9 +67,19 @@ object Permissions {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
             granted(context, Manifest.permission.ACTIVITY_RECOGNITION)
 
-    fun hasNotifications(context: Context): Boolean =
+    /** The runtime permission alone, which Android 13 and later ask for. */
+    fun hasNotificationPermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             granted(context, Manifest.permission.POST_NOTIFICATIONS)
+
+    /**
+     * Whether a notification from this app can actually be seen: the permission, and the
+     * app's notifications not switched off in the phone's settings, which on Android 12 and
+     * older is the only control there is.
+     */
+    fun hasNotifications(context: Context): Boolean =
+        hasNotificationPermission(context) &&
+            NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     /** The permissions still worth asking for on this device, empty when nothing is missing. */
     fun missing(context: Context): List<String> = buildList {
@@ -80,6 +94,31 @@ object Permissions {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
+
+    /**
+     * Whether Android will still show the system prompt for activity recognition.
+     *
+     * After a second refusal, or a "don't ask again", launching the request does nothing
+     * at all: no dialog, no callback the user can see. The only way back is the app's own
+     * settings page, so the screen has to know which of the two it is offering.
+     *
+     * [android.app.Activity.shouldShowRequestPermissionRationale] is also false before the
+     * very first request, which would read as a permanent refusal. It never is here: the
+     * first-run setup asks before any screen can show this.
+     */
+    fun activityRecognitionRefusedForGood(activity: Activity): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        if (granted(activity, Manifest.permission.ACTIVITY_RECOGNITION)) return false
+        return !ActivityCompat.shouldShowRequestPermissionRationale(
+            activity,
+            Manifest.permission.ACTIVITY_RECOGNITION,
+        )
+    }
+
+    /** Whether the phone has already been told to leave this app running in the background. */
+    fun isExemptFromBatteryOptimisation(context: Context): Boolean =
+        context.getSystemService(PowerManager::class.java)
+            ?.isIgnoringBatteryOptimizations(context.packageName) ?: false
 
     private fun granted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED

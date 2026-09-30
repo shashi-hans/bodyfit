@@ -121,16 +121,14 @@ enum class Metric(
 
 
 
-    /**
-     * The hue to print a figure in, which is not the hue to draw its mark in.
-     *
-     * Only the three gauge metrics have one: the rest are never printed in colour.
-     */
+    /** The hue to print a figure in, which is not the hue to draw its mark in. */
     fun textColor(viz: VizColors): Color = when (this) {
         STEPS -> viz.stepsText
         CALORIES -> viz.caloriesText
+        DISTANCE -> viz.distanceText
+        MOVE_MINUTES -> viz.moveMinutesText
         HEART_POINTS -> viz.heartPointsText
-        else -> color(viz)
+        WATER -> viz.waterText
     }
 
     fun color(viz: VizColors): Color = when (this) {
@@ -144,12 +142,25 @@ enum class Metric(
 
     companion object {
         /**
-         * The three metrics drawn as nested arcs on the Today gauge, outermost first.
+         * Every metric printed as a figure on the Today gauge, in reading order.
          *
-         * Capped at three deliberately: these hues are the only set that stays
-         * distinguishable for colorblind readers in both light and dark when shown
-         * side by side. See [app.bodyfit.ui.theme.VizColors].
+         * Ordered by how often the number is looked at, because the first three sit on the
+         * top row. Several hues at once is past what colour alone can separate for a
+         * colorblind reader, so each is named by its emoji and figure.
+         * See [app.bodyfit.ui.theme.VizColors].
          */
-        val GAUGE_ARCS = listOf(STEPS, CALORIES, HEART_POINTS)
+        val GAUGE_FIGURES = listOf(STEPS, CALORIES, HEART_POINTS, MOVE_MINUTES, DISTANCE, WATER)
+
+        /**
+         * The subset that also gets a band, outermost first.
+         *
+         * Distance is steps counted a second way and move minutes track the same walking,
+         * so an arc for either would retrace the steps arc. Their figures stay: the numbers
+         * are worth reading, the curves are not worth drawing twice.
+         */
+        val GAUGE_ARCS = listOf(STEPS, CALORIES, HEART_POINTS, WATER)
+
+        /** The order of the metric chips on Trends. */
+        val TRENDS_ORDER = listOf(CALORIES, STEPS, WATER, HEART_POINTS, DISTANCE, MOVE_MINUTES)
     }
 }

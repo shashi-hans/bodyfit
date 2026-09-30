@@ -31,19 +31,32 @@ object Insights {
         else -> "Obese"
     }
 
+    /**
+     * Steps a day over the full days of the window, today left out because it is unfinished.
+     *
+     * A day inside the window with no steps counts as zero, so a week off genuinely lowers
+     * the figure. Days before the first one on record do not: the app was not installed
+     * then, and dividing by them would call a three-day-old install sedentary.
+     */
     fun averageSteps(days: List<DailyRecord>, window: Int, today: LocalDate = LocalDate.now()): Int {
-        if (window <= 0) return 0
-        val keys = (0 until window).map { today.minusDays(it.toLong()).toString() }.toSet()
-        val total = days.filter { it.date in keys }.sumOf { it.steps }
-        return total / window
+        if (window <= 1) return 0
+        val keys = (1 until window).map { today.minusDays(it.toLong()).toString() }.toSet()
+        val inWindow = days.filter { it.date in keys }
+        if (inWindow.isEmpty()) return 0
+        // The first day on record at all, not the first inside the window: a week with the
+        // tracker off at the start of the window still counts as zeros.
+        val firstEver = LocalDate.parse(days.minOf { it.date })
+        val windowStart = today.minusDays((window - 1).toLong())
+        val from = if (firstEver.isAfter(windowStart)) firstEver else windowStart
+        val span = java.time.temporal.ChronoUnit.DAYS.between(from, today).toInt()
+        return inWindow.sumOf { it.steps } / span.coerceAtLeast(1)
     }
 
     /**
      * Days inside the window that the tracker actually recorded something for.
      *
-     * [averageSteps] divides by the whole window, which is what a daily average means. The
-     * score needs a different question first: whether there is enough history to average
-     * at all. Today is excluded because it is still in progress, and judging a person on a
+     * [averageSteps] answers how much; the score needs a different question first: whether
+     * there is enough history to average at all. Today is excluded because it is still in progress, and judging a person on a
      * morning would read every install as sedentary.
      */
     fun trackedDays(days: List<DailyRecord>, window: Int, today: LocalDate = LocalDate.now()): Int {
@@ -112,7 +125,14 @@ object Insights {
             if (settings.smoker) add(ScoreFactor("Smoker", -18))
             if (settings.age > 45) add(ScoreFactor("Over 45", -6))
         }
-        val score = factors.sumOf { it.delta }.coerceIn(5, 100)
+        val raw = factors.sumOf { it.delta }
+        val score = raw.coerceIn(5, 100)
+        // Named, so the working on screen always adds up to the score it explains.
+        val shown = when {
+            raw > score -> factors + ScoreFactor("Capped at 100", score - raw)
+            raw < score -> factors + ScoreFactor("Lowest score is 5", score - raw)
+            else -> factors
+        }
         val rating = when {
             score >= 80 -> Rating.GOOD
             score >= 60 -> Rating.WARNING
@@ -123,7 +143,7 @@ object Insights {
             Rating.WARNING -> "Moderate risk"
             Rating.CRITICAL -> "High risk"
         }
-        return HealthScore(score, band, rating, bmi, steps, factors)
+        return HealthScore(score, band, rating, bmi, steps, shown)
     }
 
     // ---- recommended goals ------------------------------------------------------------
@@ -180,7 +200,7 @@ object Insights {
         return Recommended(
             stepGoal = steps,
             calorieGoal = (calories / 25).roundToInt() * 25,
-            waterGoalMl = (water / 100.0).roundToInt() * 100,
+            waterGoalMl = ((water / 100.0).roundToInt() * 100).coerceIn(UserSettings.WATER_GOAL_RANGE),
             heartPointGoal = 21,
             moveMinuteGoal = 30,
         )
@@ -209,4 +229,14 @@ object Insights {
         }
         return (base + sexTerm).coerceAtLeast(0.0)
     }
+
+    /**
+     * Resting energy spent by [fractionOfDay], where 0 is midnight and 1 the end of the day.
+     *
+     * Straight-line through the day. Resting burn is not actually flat, being lower asleep
+     * and higher after a meal, but nothing here measures either, and a curve invented to
+     * look plausible would be a worse answer than the average it is drawn around.
+     */
+    fun restingKcalSoFar(settings: UserSettings, fractionOfDay: Double): Double =
+        restingKcalPerDay(settings) * fractionOfDay.coerceIn(0.0, 1.0)
 }

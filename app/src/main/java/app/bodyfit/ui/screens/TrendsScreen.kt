@@ -1,7 +1,6 @@
 package app.bodyfit.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,14 +12,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
@@ -43,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.bodyfit.data.DailyRecord
+import app.bodyfit.data.ExerciseSession
+import app.bodyfit.data.ExerciseType
 import app.bodyfit.data.Dates
 import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.UserSettings
@@ -50,9 +50,13 @@ import app.bodyfit.data.WaterEntry
 import app.bodyfit.insights.Insights
 import app.bodyfit.ui.Metric
 import app.bodyfit.ui.components.Glyph
+import app.bodyfit.ui.components.KeyValueRow
 import app.bodyfit.ui.components.ProgressMeter
+import app.bodyfit.ui.components.SectionCard
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.WeeklyBarChart
+import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.theme.LocalViz
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -85,8 +89,17 @@ fun TrendsScreen(
     hours: List<HourlyRecord>,
     /** Drinks logged on that same day, the source of the water bars. */
     hourlyWater: List<WaterEntry>,
+    /** Exercise logged on that same day, listed under the chart. */
+    hourlySessions: List<ExerciseSession>,
     /** Called with the day whose hours are needed, or null when none are. */
     onSelectDay: (String?) -> Unit,
+    /**
+     * A metric to open on the Day view of today, set when another screen sends the user
+     * here. Applied once, then [onFocusHandled] clears it so a later visit keeps the
+     * user's own choice.
+     */
+    focus: Metric? = null,
+    onFocusHandled: () -> Unit = {},
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -99,11 +112,20 @@ fun TrendsScreen(
     /** How many spans back from today the screen is looking. 0 is the current one. */
     var offset by rememberSaveable { mutableIntStateOf(0) }
 
-    // Changing span with an offset held would land somewhere arbitrary: four weeks back is
-    // not four days back. Every change of span returns to the present.
-    LaunchedEffect(window) { offset = 0 }
+    LaunchedEffect(focus) {
+        if (focus == null) return@LaunchedEffect
+        metric = focus
+        window = Window.DAY
+        offset = 0
+        selectedBar = null
+        onFocusHandled()
+    }
 
     val today = remember(activeDate) { Dates.parse(activeDate) }
+    // A weekday names a day within a week; across a month "Mon" matches four of them, so
+    // the month view names the date.
+    fun barLabel(date: String): String =
+        if (window == Window.MONTH) Dates.dayLabel(date) else Dates.weekdayLabel(date)
     val anchor = remember(today, window, offset) {
         when (window) {
             Window.DAY -> today.minusDays(offset.toLong())
@@ -207,6 +229,11 @@ fun TrendsScreen(
                     FilterChip(
                         selected = option == window,
                         onClick = {
+                            // Changing span with an offset held would land somewhere
+                            // arbitrary: four weeks back is not four days back. Reset here
+                            // rather than in an effect, which would also fire on every
+                            // rotation and throw away the saved offset.
+                            if (option != window) offset = 0
                             window = option
                             selectedBar = null
                         },
@@ -223,7 +250,12 @@ fun TrendsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 IconButton(
-                    onClick = { offset += 1 },
+                    // The tapped bar is an index into the span, so it is cleared with the
+                    // span: kept, it would silently point at a different day.
+                    onClick = {
+                        offset += 1
+                        selectedBar = null
+                    },
                     enabled = canGoBack,
                 ) {
                     Icon(
@@ -241,7 +273,10 @@ fun TrendsScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 IconButton(
-                    onClick = { offset -= 1 },
+                    onClick = {
+                        offset -= 1
+                        selectedBar = null
+                    },
                     enabled = canGoForward,
                 ) {
                     Icon(
@@ -253,13 +288,25 @@ fun TrendsScreen(
         }
 
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+            val chips = rememberLazyListState()
+            // Six chips run past a phone's width, so a metric chosen from another screen or
+            // restored on return can sit off the edge. Scroll only when the chip is not
+            // fully on screen, so a tap on a visible chip leaves the row where it is.
+            LaunchedEffect(metric) {
+                val index = Metric.TRENDS_ORDER.indexOf(metric)
+                val info = chips.layoutInfo
+                val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+                val fullyVisible = item != null &&
+                    item.offset >= info.viewportStartOffset &&
+                    item.offset + item.size <= info.viewportEndOffset
+                if (!fullyVisible) chips.animateScrollToItem(index)
+            }
+            LazyRow(
+                state = chips,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Metric.entries.forEach { entry ->
+                items(Metric.TRENDS_ORDER) { entry ->
                     val selected = entry == metric
                     FilterChip(
                         selected = selected,
@@ -294,9 +341,8 @@ fun TrendsScreen(
         }
 
         item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 24.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -337,7 +383,7 @@ fun TrendsScreen(
                             index != null && window == Window.DAY ->
                                 "${Dates.hourRangeLabel(index)}: ${metric.formatWithUnit(values[index])}"
                             index != null && days.getOrNull(index) != null ->
-                                "${Dates.weekdayLabel(days[index].date)}: ${metric.formatWithUnit(values[index])}"
+                                "${barLabel(days[index].date)}: ${metric.formatWithUnit(values[index])}"
                             window == Window.DAY -> "Tap a bar to read one hour."
                             else -> "Tap a bar to see that day hour by hour."
                         },
@@ -376,6 +422,41 @@ fun TrendsScreen(
             }
         }
 
+        // Sessions earn minutes, calories and heart points that no step produced, so a day
+        // with exercise on it has bars the step count cannot explain. Listing what was
+        // logged is what makes those bars readable.
+        if (hourlySessions.isNotEmpty()) {
+            item {
+                SectionCard(corner = 24.dp) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "🏋️  Exercise logged",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        hourlySessions.forEach { session ->
+                            val type = ExerciseType.from(session.type)
+                            KeyValueRow(
+                                label = "${type?.emoji ?: "🏃"}  ${type?.label ?: session.type}" +
+                                    " · ${Dates.hourLabel(Dates.hourOf(session.startedAt))}",
+                                value = "${clock(session.seconds)} · " +
+                                    "${session.kcal.toInt()} kcal · ${session.heartPoints} pts",
+                            )
+                        }
+                        Text(
+                            text = "Counted in the hour each session started, so these are " +
+                                "already inside the bars above.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+
         if (window != Window.DAY && tappedDate != null) {
             item {
                 HourlyCard(
@@ -391,9 +472,8 @@ fun TrendsScreen(
         }
 
         item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            SectionCard(
+                corner = 24.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -433,7 +513,7 @@ fun TrendsScreen(
                         SummaryRow(
                             label = "🏅 Best day",
                             value = bestIndex?.let {
-                                "${Dates.weekdayLabel(days[it].date)} · ${metric.formatWithUnit(values[it])}"
+                                "${barLabel(days[it].date)} · ${metric.formatWithUnit(values[it])}"
                             } ?: "No activity yet",
                         )
                         SummaryRow(
@@ -450,12 +530,11 @@ fun TrendsScreen(
                             "🛏️ Resting burn (estimated)",
                             "${Insights.restingKcalPerDay(settings).toInt()} kcal a day",
                         )
-                        Text(
-                            text = "The chart and the target above count active calories only. " +
-                                "Resting burn is what the body spends doing nothing, estimated " +
-                                "from your height, weight, age and sex.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        WellnessNote(
+                            text = "The chart and the target above count active calories " +
+                                "only. Resting burn is what the body spends doing nothing, " +
+                                "estimated from your height, weight, age and sex. " +
+                                Wellness.SHORT,
                         )
                     }
                 }
@@ -470,9 +549,8 @@ fun TrendsScreen(
 
         if (showTable) {
             item {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                SectionCard(
+                    corner = 20.dp,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -487,7 +565,7 @@ fun TrendsScreen(
                                     text = if (window == Window.DAY) {
                                         Dates.hourRangeLabel(index)
                                     } else {
-                                        Dates.weekdayLabel(days[index].date)
+                                        barLabel(days[index].date)
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -552,9 +630,8 @@ private fun HourlyCard(
     }
     val busiest = values.indices.maxByOrNull { values[it] }?.takeIf { values[it] > 0.0 }
 
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    SectionCard(
+        corner = 24.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

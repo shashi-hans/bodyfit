@@ -35,11 +35,25 @@ class InsightsTest {
     }
 
     @Test
-    fun `average steps divides by the window, not by the days present`() {
-        // Seven recorded days averaged over fourteen: half the window is genuinely empty,
-        // and treating it as absent would flatter the number.
-        val avg = Insights.averageSteps(days(14_000, 14_000, 14_000, 14_000, 14_000, 14_000, 14_000), 14, today)
-        assertEquals(7_000, avg)
+    fun `average steps counts empty days after install but not before it or today`() {
+        // Today (index 0) is unfinished and left out. Days 1 to 6 are on record; day 3 has
+        // no row and counts as zero. Days 7 to 13 predate the install and are not counted.
+        val recorded = days(99_000, 14_000, 14_000, 0, 14_000, 14_000, 14_000).filter { it.steps != 0 }
+        assertEquals(70_000 / 6, Insights.averageSteps(recorded, 14, today))
+    }
+
+    @Test
+    fun `days off at the start of the window still count once there is older history`() {
+        // Tracked long ago (day 30), nothing on days 7 to 13, then 6 active days. The
+        // average divides by the 13 full days of the window, not by the 6 with rows.
+        val history = days(0, 14_000, 14_000, 14_000, 14_000, 14_000, 14_000).drop(1) +
+            DailyRecord(date = today.minusDays(30).toString(), steps = 5_000)
+        assertEquals(84_000 / 13, Insights.averageSteps(history, 14, today))
+    }
+
+    @Test
+    fun `no history averages to zero`() {
+        assertEquals(0, Insights.averageSteps(emptyList(), 14, today))
     }
 
     @Test

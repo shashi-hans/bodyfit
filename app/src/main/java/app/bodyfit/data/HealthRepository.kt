@@ -1,6 +1,9 @@
 package app.bodyfit.data
 
 import android.content.Context
+import app.bodyfit.notification.WaterReminder
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
@@ -11,6 +14,8 @@ import java.time.LocalDate
  * day-rollover and water-total rules.
  */
 class HealthRepository(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private val dao = HealthDatabase.get(context).healthDao()
     private val trackerState = TrackerStateRepository(context.applicationContext)
@@ -37,18 +42,38 @@ class HealthRepository(context: Context) {
     fun observeWaterEntries(date: String = Dates.today()): Flow<List<WaterEntry>> =
         dao.observeWaterEntries(date)
 
+    /**
+     * Today's water and the time of the last drink on any day. The last drink is not limited
+     * to today, so a glass at 23:50 still counts for a reminder due at 00:05.
+     */
+    suspend fun drinkState(): DrinkState =
+        DrinkState(drankTodayMl = dao.waterTotal(Dates.today()), lastDrinkAt = dao.lastWaterLoggedAt())
+
     /** Every recorded day. Streaks and the health score read the whole history. */
     fun observeAllDays(): Flow<List<DailyRecord>> = dao.observeAllDays()
 
     suspend fun allDays(): List<DailyRecord> = dao.allDaysOnce()
 
+    /**
+     * Whether there is any history worth writing to a backup.
+     *
+     * The scheduled backup asks before it writes. A database with no days in it produces a
+     * perfectly valid backup of nothing, and writing that over the only good copy is how a
+     * user who cleared the app's data loses the history they cleared it to recover.
+     */
+    suspend fun hasAnythingToBackUp(): Boolean = dao.hasAnyDay()
+
     /** Snapshot for the backup writer. */
-    suspend fun backupJson(): String = Backup.toJson(
-        days = allDays(),
-        hours = dao.allHoursOnce(),
-        water = dao.allWaterEntries(),
-        settings = currentSettings(),
-    )
+    suspend fun backupJson(): String {
+        val rows = dao.backupRows()
+        return Backup.toJson(
+            days = rows.days,
+            hours = rows.hours,
+            water = rows.water,
+            sessions = rows.sessions,
+            settings = currentSettings(),
+        )
+    }
 
     /**
      * Writes a backup file back into the database and the settings store.
@@ -56,13 +81,21 @@ class HealthRepository(context: Context) {
      * Returns the number of days restored. Throws [IllegalArgumentException] with a message
      * worth showing the user when the file is not a backup this build can read.
      *
-     * A version 1 file carries no hourly rows. Restoring one leaves its days without a
-     * breakdown, which the trends screen already draws as an empty day rather than a gap.
+     * A version 1 file carries no hourly rows and a version 2 file no sessions. Restoring
+     * either leaves its days without that detail, which the trends screen already draws as
+     * an empty day rather than a gap.
      */
     suspend fun restoreJson(json: String): Int {
         val snapshot = Backup.fromJson(json, currentSettings())
-        dao.restore(snapshot.days, snapshot.hours, snapshot.water)
-        userSettings.replace(snapshot.settings)
+        // Not cancellable once writing starts: callers run this from screen scopes that a
+        // rotation cancels, and stopping between the two writes would leave the history
+        // restored but the settings not.
+        withContext(NonCancellable) {
+            dao.restore(snapshot.days, snapshot.hours, snapshot.water, snapshot.sessions)
+            userSettings.replace(snapshot.settings)
+        }
+        // A restored file can turn the drink reminder on or change its interval.
+        WaterReminder.apply(appContext, userSettings.current())
         return snapshot.days.size
     }
 
@@ -103,17 +136,13 @@ class HealthRepository(context: Context) {
     fun observeSessions(date: String = Dates.today()): Flow<List<ExerciseSession>> =
         dao.observeSessions(date)
 
-    /** Marks an exercise as running, which stops the tracker scoring the same minutes twice. */
-    suspend fun startSession(at: Long = System.currentTimeMillis()) {
-        trackerState.setSessionStartedAt(at)
-    }
-
     /**
      * Records a finished exercise and folds it into the day.
      *
      * [seconds] is time spent moving, not wall-clock time: a session paused at a traffic
      * light is not billed for standing there. [measuredMet] replaces the activity's assumed
-     * effort where the accelerometer could measure it, which today means skipping.
+     * effort where it could be measured: jump rate for skipping, GPS speed for running and
+     * cycling. [metres] is the ground GPS saw covered, 0 where nothing measured it.
      *
      * A session under [MIN_SESSION_SECONDS] is discarded: it is a mis-tap, and logging a
      * four-second run would put a stray row in the list and a rounding error in the totals.
@@ -124,18 +153,22 @@ class HealthRepository(context: Context) {
         startedAt: Long,
         seconds: Int,
         measuredMet: Double? = null,
+        metres: Double = 0.0,
     ): ExerciseSession? {
         trackerState.setSessionStartedAt(0L)
         if (seconds < MIN_SESSION_SECONDS) return null
         val minutes = seconds / 60.0
         val weight = currentSettings().weightKg
+        // Dated by its start, the same moment its hour is taken from, so a run across
+        // midnight lands on one day and one hour rather than an hour of the next day.
         val session = ExerciseSession(
-            date = Dates.today(),
+            date = Dates.of(startedAt),
             type = type.name,
             startedAt = startedAt,
             seconds = seconds,
             kcal = type.kcal(minutes, weight, measuredMet),
             heartPoints = type.heartPoints(minutes, measuredMet),
+            metres = metres,
         )
         dao.addSession(session, moveMinutes = minutes.toInt())
         return session
@@ -154,3 +187,6 @@ class HealthRepository(context: Context) {
         const val MIN_SESSION_SECONDS = 20
     }
 }
+
+/** What the water reminder needs to know to decide whether to ring. */
+data class DrinkState(val drankTodayMl: Int, val lastDrinkAt: Long?)

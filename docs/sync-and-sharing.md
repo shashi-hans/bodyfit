@@ -4,8 +4,11 @@ Spec for turning Body Fit from an on-device tracker into an account-backed one: 
 sharing with a coach or family member, private-group challenges, multi-device sync, and
 revocation that actually revokes.
 
-Status: contract agreed, hosting not chosen. The client is built against a local mock that
-implements this document, so the server can be written later without reopening the app.
+Status: contract agreed, hosting not chosen, nothing built. The client once held a local
+mock of this contract; it was deleted on 27 September 2026 because nothing in the app
+called it, and code that reads as "about to sign in and upload health data" does not belong
+in an app whose README and privacy policy both promise no account and no server. Rebuild it
+from this document when there is a server to talk to.
 
 ## Decisions already made
 

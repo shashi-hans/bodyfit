@@ -28,12 +28,21 @@ Supporting facts, each checkable in the repo:
 
 - No `INTERNET` permission, so no data of any kind can leave the device, location included.
 - Location is read only while a running or cycling session is open, and the fixes are
-  consumed for distance and dropped (`sensor/SpeedMonitor.kt`). The session row holds
+  consumed for distance and dropped (`sensor/SpeedMonitor.kt`).
+- The session runs in a foreground service of type `location|health`
+  (`sensor/ExerciseSessionService.kt`, `FOREGROUND_SERVICE_LOCATION`), so GPS continues with
+  the screen off while the session notification is showing. Play asks for a foreground
+  service declaration for the `location` type: the use is "user-initiated workout tracking",
+  location is claimed only when the user taps Running or Cycling (Skipping runs the same
+  service without it), and the service stops when they tap Stop. No
+  `ACCESS_BACKGROUND_LOCATION` is requested. The session row holds
   duration, distance and calories, never coordinates (`data/ExerciseSession.kt`).
-- No HTTP client, no analytics SDK, no crash reporter. Dependencies are Compose, Room,
-  DataStore and Lifecycle only (`app/build.gradle.kts`).
-- `android:allowBackup="false"`, so Android's own backup does not copy health data to the
-  user's Google account either.
+- No HTTP client, no analytics SDK, no crash reporter. Dependencies are Compose, Navigation,
+  Room, DataStore, WorkManager and Lifecycle only (`app/build.gradle.kts`).
+- `android:allowBackup="false"` plus `res/xml/data_extraction_rules.xml`, which excludes
+  everything from cloud backup and device-to-device transfer. Android 12 and later ignore
+  `allowBackup` for transfer, so the rules file is what keeps health data off a new phone
+  unless the user moves a backup file.
 - Export and restore write and read a file the user picks through the system picker. The
   app never sees a path it was not handed.
 
@@ -44,10 +53,16 @@ Supporting facts, each checkable in the repo:
 | `ACTIVITY_RECOGNITION` | Required by Android to read `TYPE_STEP_COUNTER`. The app's entire purpose is counting steps. |
 | `POST_NOTIFICATIONS` | The lock-screen card showing daily totals, and the foreground service notification Android requires. |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH` | Counting steps while the app is closed. The `health` type is the correct one: the service reads a health sensor. |
+| `FOREGROUND_SERVICE_LOCATION` | The exercise session service keeps reading GPS with the screen off during a running or cycling session the user started. Only while the session notification shows. |
+| `WAKE_LOCK` | Held only while an exercise session runs, bounded at six hours, so its clock and jump count continue with the screen off. |
 | `RECEIVE_BOOT_COMPLETED` | Resuming step counting after a restart. |
 | `ACCESS_FINE_LOCATION` | Measuring speed during a running or cycling session the user starts, to estimate effort. Requested at the session, not at launch. Optional: refusing falls back to an assumed effort. No coordinate is stored or transmitted. |
 
 ## Foreground service declaration
+
+Two services. The step tracker below, and the exercise session service described after it.
+
+### Step tracker
 
 Type: **health**
 
@@ -61,6 +76,21 @@ loses the timing that calories, move minutes and heart points depend on.
 
 User-facing control: a switch on the lock screen card page turns the service and its
 notification off together.
+
+### Exercise session
+
+Type: **location|health** (`health` only when activity recognition is granted, `location`
+only when location is granted), plus `shortService`, used only to end a start that lost its
+permission in between without a crash
+
+What it does: times a running, cycling or skipping session the user starts, reading the
+accelerometer and, for running and cycling, GPS, so distance and speed keep being measured
+with the phone locked in a pocket.
+
+Why a foreground service is necessary: while-in-use location stops when the screen locks,
+and a run measured only while the screen is on comes out short. The service runs only
+between the user tapping an activity and tapping Stop, and shows an "in progress"
+notification throughout. No coordinate is stored.
 
 ## Health apps declaration
 

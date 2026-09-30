@@ -24,9 +24,27 @@ class BackupTest {
         WaterEntry(1, "2026-09-08", 500, 1_788_800_000_000),
         WaterEntry(2, "2026-09-08", 250, 1_788_800_100_000),
     )
-    private val settings = UserSettings(heightCm = 179, weightKg = 75, age = 34, sex = Sex.MALE)
+    private val sessions = listOf(
+        ExerciseSession(
+            id = 1,
+            date = "2026-09-08",
+            type = "RUNNING",
+            startedAt = 1_788_800_200_000,
+            seconds = 1_500,
+            kcal = 210.5,
+            heartPoints = 50,
+            metres = 4_200.0,
+        ),
+    )
+    private val settings = UserSettings(
+        name = "Sam",
+        heightCm = 179,
+        weightKg = 75,
+        age = 34,
+        sex = Sex.MALE,
+    )
 
-    private fun parsed() = JSONObject(Backup.toJson(days, hours, water, settings))
+    private fun parsed() = JSONObject(Backup.toJson(days, hours, water, sessions, settings))
 
     @Test
     fun `every day survives the round trip with all its fields`() {
@@ -55,7 +73,7 @@ class BackupTest {
         for (key in listOf(
             "heightCm", "weightKg", "age", "smoker", "stepGoal", "waterGoalMl",
             "calorieGoal", "heartPointGoal", "moveMinuteGoal", "weeklyStepGoal",
-            "weeklyHeartPointGoal", "defaultCupMl",
+            "weeklyHeartPointGoal", "cupSizesMl",
         )) {
             assertTrue("$key missing from the backup", s.has(key))
         }
@@ -72,14 +90,76 @@ class BackupTest {
 
     @Test
     fun `an empty history still produces a valid file rather than failing`() {
-        val root = JSONObject(Backup.toJson(emptyList(), emptyList(), emptyList(), UserSettings()))
+        val root = JSONObject(Backup.toJson(emptyList(), emptyList(), emptyList(), emptyList(), UserSettings()))
         assertEquals(0, root.getJSONArray("days").length())
         assertEquals(0, root.getJSONArray("hours").length())
         assertEquals(0, root.getJSONArray("waterEntries").length())
+        assertEquals(0, root.getJSONArray("sessions").length())
     }
 
     @Test
     fun `the suggested name is dated so successive exports do not overwrite`() {
         assertEquals("bodyfit-backup-2026-09-08.json", Backup.suggestedFileName("2026-09-08"))
+    }
+
+    @Test
+    fun `a session survives the round trip with its distance`() {
+        val out = Backup.fromJson(parsed().toString(), UserSettings()).sessions
+        assertEquals(1, out.size)
+        val session = out.first()
+        assertEquals("RUNNING", session.type)
+        assertEquals(1_500, session.seconds)
+        assertEquals(50, session.heartPoints)
+        assertEquals(4_200.0, session.metres, 0.001)
+        assertEquals(210.5, session.kcal, 0.001)
+    }
+
+    @Test
+    fun `the name survives the round trip`() {
+        assertEquals("Sam", Backup.fromJson(parsed().toString(), UserSettings()).settings.name)
+    }
+
+    @Test
+    fun `a file written before sessions existed restores without them`() {
+        val older = parsed().apply { remove("sessions") }.toString()
+        assertEquals(emptyList<ExerciseSession>(), Backup.fromJson(older, UserSettings()).sessions)
+    }
+
+    @Test
+    fun `cup sizes round-trip through a backup`() {
+        val json = Backup.toJson(emptyList(), emptyList(), emptyList(), emptyList(), UserSettings(cupSizesMl = listOf(150, 350, 750)))
+        assertEquals(listOf(150, 350, 750), Backup.fromJson(json, UserSettings()).settings.cupSizesMl)
+    }
+
+    @Test
+    fun `a single default cup from an older file becomes that size plus 500 ml`() {
+        val older = """{"format":1,"settings":{"defaultCupMl":300}}"""
+        assertEquals(listOf(200, 300, 500), Backup.fromJson(older, UserSettings()).settings.cupSizesMl)
+    }
+
+    @Test
+    fun `short, duplicate or out-of-range cup lists still give three sizes`() {
+        assertEquals(listOf(200, 250, 1_000), UserSettings.normalizeCups(listOf(5_000, 5_000)))
+        assertEquals(listOf(100, 200, 250), UserSettings.normalizeCups(listOf(10)))
+        assertEquals(listOf(200, 300, 350), UserSettings.normalizeCups(listOf(330, 290)))
+        assertEquals(listOf(200, 250, 500), UserSettings.normalizeCups(emptyList()))
+    }
+
+    @Test
+    fun `the water reminder settings survive the round trip`() {
+        val settings = UserSettings(
+            waterReminderEnabled = true,
+            waterReminderMinutes = 90,
+            waterReminderStartHour = 7,
+            waterReminderEndHour = 23,
+            waterReminderRingUntilStopped = false,
+        )
+        val json = Backup.toJson(emptyList(), emptyList(), emptyList(), emptyList(), settings)
+        val restored = Backup.fromJson(json, UserSettings()).settings
+        assertEquals(true, restored.waterReminderEnabled)
+        assertEquals(90, restored.waterReminderMinutes)
+        assertEquals(7, restored.waterReminderStartHour)
+        assertEquals(23, restored.waterReminderEndHour)
+        assertEquals(false, restored.waterReminderRingUntilStopped)
     }
 }

@@ -24,9 +24,12 @@ data class DailyRecord(
     val activeKcal: Double = 0.0,
     val waterMl: Int = 0,
     /**
-     * Local wall-clock time of the last change, used to decide what still needs pushing.
-     * The server stamps its own time on write; this one is only a tiebreak hint, because a
-     * phone's clock can be wrong or deliberately moved.
+     * Local wall-clock time of the last change to this row.
+     *
+     * Written on every update and read by nothing today. It is kept because dropping a
+     * column costs a migration and rebuilds the table, which is a real risk to a user's
+     * only copy of their history, and because "when did this row last change" is the first
+     * thing wanted whenever a day's figures are disputed.
      */
     val updatedAt: Long = 0L,
 )

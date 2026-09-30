@@ -14,6 +14,7 @@ import app.bodyfit.data.HealthRepository
 import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
+import app.bodyfit.notification.WaterReminder
 import app.bodyfit.data.WaterEntry
 import app.bodyfit.sensor.StepTrackerService
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -86,15 +87,24 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         .flatMapLatest { repository.observeSessions(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun startExercise() = viewModelScope.launch { repository.startSession() }
+    /**
+     * Exercise logged on whichever day the trends screen is showing in detail.
+     *
+     * Keyed on the same date as [hourlyWater], so a day opened from a Week or Month bar
+     * brings its sessions with it rather than showing today's against someone else's hours.
+     */
+    val hourlySessions: StateFlow<List<ExerciseSession>> = hourlyDate
+        .flatMapLatest { date -> date?.let { repository.observeSessions(it) } ?: flowOf(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun stopExercise(
         type: ExerciseType,
         startedAt: Long,
         seconds: Int,
         measuredMet: Double? = null,
+        metres: Double = 0.0,
     ) = viewModelScope.launch {
-        repository.stopSession(type, startedAt, seconds, measuredMet)
+        repository.stopSession(type, startedAt, seconds, measuredMet, metres)
     }
 
     fun deleteExercise(session: ExerciseSession) = viewModelScope.launch {
@@ -140,16 +150,18 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         repository.userSettings.setWeeklyHeartPointGoal(value)
     }
 
+    fun setName(value: String) = viewModelScope.launch { repository.userSettings.setName(value) }
+
     fun setHeight(value: Int) = viewModelScope.launch { repository.userSettings.setHeightCm(value) }
     fun setAge(value: Int) = viewModelScope.launch { repository.userSettings.setAge(value) }
     fun setSmoker(value: Boolean) = viewModelScope.launch { repository.userSettings.setSmoker(value) }
     fun setSex(value: Sex) = viewModelScope.launch { repository.userSettings.setSex(value) }
     fun setWeight(value: Int) = viewModelScope.launch { repository.userSettings.setWeightKg(value) }
-    fun setDefaultCup(value: Int) = viewModelScope.launch { repository.userSettings.setDefaultCup(value) }
+    fun setCupSizes(value: List<Int>) = viewModelScope.launch { repository.userSettings.setCupSizes(value) }
 
     private val autoBackup = AutoBackupSettings(application)
 
-    /** Where the weekly backup writes, or null when it is off. */
+    /** Where the daily backup writes, or null when it is off. */
     val autoBackupTarget: StateFlow<Uri?> = autoBackup.target
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -159,7 +171,10 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     val autoBackupError: StateFlow<String?> = autoBackup.lastError
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Remembers the chosen file, writes it once now, and schedules the weekly repeat. */
+    /** Where the backup goes when nothing has been chosen. */
+    val autoBackupDefaultLabel: String = autoBackup.defaultLocationLabel()
+
+    /** Remembers the chosen file, writes it once now, and schedules the daily repeat. */
     fun enableAutoBackup(uri: Uri) = viewModelScope.launch {
         autoBackup.setTarget(uri)
         val context = getApplication<Application>()
@@ -172,9 +187,17 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         AutoBackupWorker.schedule(context)
     }
 
-    fun disableAutoBackup() = viewModelScope.launch {
+    /**
+     * Goes back to the default folder. The schedule stays: the backup is never off, only
+     * pointed somewhere else.
+     */
+    fun useDefaultBackupLocation() = viewModelScope.launch {
         autoBackup.clearTarget()
-        AutoBackupWorker.cancel(getApplication())
+        runCatching {
+            autoBackup.writeDefault(repository.backupJson())
+        }.onSuccess { autoBackup.recordRun(System.currentTimeMillis(), error = null) }
+            .onFailure { autoBackup.recordRun(System.currentTimeMillis(), it.message) }
+        AutoBackupWorker.schedule(getApplication())
     }
 
     /** Serialises everything to JSON for the backup file. */
@@ -182,6 +205,34 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Writes a chosen backup file back in. Returns the number of days restored. */
     suspend fun restoreJson(json: String): Int = repository.restoreJson(json)
+
+    /** Starts or stops the drink reminder schedule along with the setting. */
+    fun setWaterReminderEnabled(enabled: Boolean) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderEnabled(enabled)
+        WaterReminder.apply(getApplication(), repository.currentSettings())
+    }
+
+    fun setWaterReminderMinutes(minutes: Int) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderMinutes(minutes)
+        WaterReminder.apply(getApplication(), repository.currentSettings())
+    }
+
+    fun setWaterReminderRing(value: Boolean) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderRing(value)
+    }
+
+    fun setWaterReminderSound(value: String) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderSound(value)
+    }
+
+    /** Posts a reminder now, whatever the hours and the day's total, to hear the sound. */
+    fun sendTestWaterReminder() = viewModelScope.launch {
+        WaterReminder.post(getApplication(), repository.currentSettings(), repository.drinkState().drankTodayMl)
+    }
+
+    fun setWaterReminderHours(startHour: Int, endHour: Int) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderHours(startHour, endHour)
+    }
 
     /** Turning the tracker off stops the service, which also removes the lock-screen card. */
     fun setTrackerEnabled(enabled: Boolean) = viewModelScope.launch {

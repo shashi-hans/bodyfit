@@ -18,18 +18,25 @@ import org.json.JSONObject
  */
 object Backup {
 
-    const val FORMAT_VERSION = 2
+    const val FORMAT_VERSION = 3
     const val MIME_TYPE = "application/json"
 
     fun suggestedFileName(today: String = Dates.today()): String = "bodyfit-backup-$today.json"
 
-    /** Undated, because the weekly backup rewrites one file rather than adding to a pile. */
-    fun autoBackupFileName(): String = "bodyfit-weekly-backup.json"
+    /**
+     * Undated, because the scheduled backup rewrites one file rather than adding to a pile.
+     * The one definition of the name, shared with [AutoBackupSettings].
+     *
+     * The cadence is not in the name either. It was once, and changing weekly to daily then
+     * meant either a lie in the filename or an orphaned file on every phone.
+     */
+    fun autoBackupFileName(): String = "bodyfit-backup.json"
 
     fun toJson(
         days: List<DailyRecord>,
         hours: List<HourlyRecord>,
         water: List<WaterEntry>,
+        sessions: List<ExerciseSession>,
         settings: UserSettings,
     ): String {
         val root = JSONObject()
@@ -39,6 +46,7 @@ object Backup {
         root.put(
             "settings",
             JSONObject().apply {
+                put("name", settings.name)
                 put("heightCm", settings.heightCm)
                 put("weightKg", settings.weightKg)
                 put("age", settings.age)
@@ -51,7 +59,12 @@ object Backup {
                 put("moveMinuteGoal", settings.moveMinuteGoal)
                 put("weeklyStepGoal", settings.weeklyStepGoal)
                 put("weeklyHeartPointGoal", settings.weeklyHeartPointGoal)
-                put("defaultCupMl", settings.defaultCupMl)
+                put("cupSizesMl", JSONArray(settings.cupSizesMl))
+                put("waterReminderEnabled", settings.waterReminderEnabled)
+                put("waterReminderMinutes", settings.waterReminderMinutes)
+                put("waterReminderStartHour", settings.waterReminderStartHour)
+                put("waterReminderEndHour", settings.waterReminderEndHour)
+                put("waterReminderRingUntilStopped", settings.waterReminderRingUntilStopped)
             },
         )
 
@@ -106,13 +119,38 @@ object Backup {
             },
         )
 
+        // Sessions are carried as well as the day totals they were folded into, because a
+        // calorie figure with no explanation is not checkable: a restored day showing 300
+        // kcal should still be able to name the ride that caused it. They are not re-folded
+        // on restore, since the day rows in the file already include them.
+        root.put(
+            "sessions",
+            JSONArray().apply {
+                sessions.forEach { session ->
+                    put(
+                        JSONObject().apply {
+                            put("date", session.date)
+                            put("type", session.type)
+                            put("startedAt", session.startedAt)
+                            put("seconds", session.seconds)
+                            put("kcal", session.kcal)
+                            put("heartPoints", session.heartPoints)
+                            put("metres", session.metres)
+                        },
+                    )
+                }
+            },
+        )
+
         return root.toString(2)
     }
 
     /** Returns the number of bytes written, or throws whatever the content resolver throws. */
     fun write(context: Context, target: Uri, json: String): Int {
         val bytes = json.toByteArray()
-        context.contentResolver.openOutputStream(target)?.use { it.write(bytes) }
+        // "wt" truncates: some providers leave the old tail behind on a plain "w" open, and
+        // a longer file saved over would then no longer be valid JSON.
+        context.contentResolver.openOutputStream(target, "wt")?.use { it.write(bytes) }
             ?: error("could not open $target for writing")
         return bytes.size
     }
@@ -122,6 +160,7 @@ object Backup {
         val days: List<DailyRecord>,
         val hours: List<HourlyRecord>,
         val water: List<WaterEntry>,
+        val sessions: List<ExerciseSession>,
         val settings: UserSettings,
     )
 
@@ -153,6 +192,9 @@ object Backup {
             current
         } else {
             current.copy(
+                // Absent in a file written before the name existed, which reads as the
+                // name already on the phone rather than as an instruction to clear it.
+                name = settingsJson.optString("name", current.name),
                 heightCm = settingsJson.optInt("heightCm", current.heightCm),
                 weightKg = settingsJson.optInt("weightKg", current.weightKg),
                 age = settingsJson.optInt("age", current.age),
@@ -169,21 +211,29 @@ object Backup {
                     "weeklyHeartPointGoal",
                     current.weeklyHeartPointGoal,
                 ),
-                defaultCupMl = settingsJson.optInt("defaultCupMl", current.defaultCupMl),
+                cupSizesMl = cupSizes(settingsJson) ?: current.cupSizesMl,
+                waterReminderEnabled = settingsJson.optBoolean("waterReminderEnabled", current.waterReminderEnabled),
+                waterReminderMinutes = settingsJson.optInt("waterReminderMinutes", current.waterReminderMinutes),
+                waterReminderStartHour = settingsJson.optInt("waterReminderStartHour", current.waterReminderStartHour),
+                waterReminderEndHour = settingsJson.optInt("waterReminderEndHour", current.waterReminderEndHour),
+                waterReminderRingUntilStopped = settingsJson.optBoolean(
+                    "waterReminderRingUntilStopped",
+                    current.waterReminderRingUntilStopped,
+                ),
             )
         }
 
         val daysJson = root.optJSONArray("days") ?: JSONArray()
         val days = (0 until daysJson.length()).mapNotNull { index ->
             val row = daysJson.optJSONObject(index) ?: return@mapNotNull null
-            val date = row.optString("date").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val date = validDate(row.optString("date")) ?: return@mapNotNull null
             DailyRecord(
                 date = date,
-                steps = row.optInt("steps"),
-                moveMinutes = row.optInt("moveMinutes"),
-                heartPoints = row.optInt("heartPoints"),
+                steps = row.optInt("steps").coerceAtLeast(0),
+                moveMinutes = row.optInt("moveMinutes").coerceAtLeast(0),
+                heartPoints = row.optInt("heartPoints").coerceAtLeast(0),
                 activeKcal = row.optDouble("activeKcal", 0.0).takeIf { !it.isNaN() } ?: 0.0,
-                waterMl = row.optInt("waterMl"),
+                waterMl = row.optInt("waterMl").coerceAtLeast(0),
             )
         }
 
@@ -192,15 +242,15 @@ object Backup {
         val hoursJson = root.optJSONArray("hours") ?: JSONArray()
         val hours = (0 until hoursJson.length()).mapNotNull { index ->
             val row = hoursJson.optJSONObject(index) ?: return@mapNotNull null
-            val date = row.optString("date").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val date = validDate(row.optString("date")) ?: return@mapNotNull null
             val hour = row.optInt("hour", -1)
             if (hour !in 0..23) return@mapNotNull null
             HourlyRecord(
                 date = date,
                 hour = hour,
-                steps = row.optInt("steps"),
-                moveMinutes = row.optInt("moveMinutes"),
-                heartPoints = row.optInt("heartPoints"),
+                steps = row.optInt("steps").coerceAtLeast(0),
+                moveMinutes = row.optInt("moveMinutes").coerceAtLeast(0),
+                heartPoints = row.optInt("heartPoints").coerceAtLeast(0),
                 activeKcal = row.optDouble("activeKcal", 0.0).takeIf { !it.isNaN() } ?: 0.0,
             )
         }
@@ -208,14 +258,68 @@ object Backup {
         val waterJson = root.optJSONArray("waterEntries") ?: JSONArray()
         val water = (0 until waterJson.length()).mapNotNull { index ->
             val row = waterJson.optJSONObject(index) ?: return@mapNotNull null
-            val date = row.optString("date").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val date = validDate(row.optString("date")) ?: return@mapNotNull null
             val amount = row.optInt("amountMl")
             if (amount <= 0) return@mapNotNull null
-            WaterEntry(date = date, amountMl = amount, loggedAt = row.optLong("loggedAt"))
+            // A drink with no time is placed at noon rather than at the epoch, which would draw
+            // it in the early hours of the day.
+            val loggedAt = row.optLong("loggedAt", 0L).takeIf { it > 0L } ?: Dates.noonOf(date)
+            WaterEntry(date = date, amountMl = amount, loggedAt = loggedAt)
         }
 
-        return Snapshot(days = days, hours = hours, water = water, settings = settings)
+        // Absent from a version 1 or 2 file, which restores its days and simply has no
+        // sessions behind them to explain the figures.
+        val sessionsJson = root.optJSONArray("sessions") ?: JSONArray()
+        val sessions = (0 until sessionsJson.length()).mapNotNull { index ->
+            val row = sessionsJson.optJSONObject(index) ?: return@mapNotNull null
+            val date = validDate(row.optString("date")) ?: return@mapNotNull null
+            val type = row.optString("type").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            ExerciseSession(
+                date = date,
+                // Stored as the enum name, so a type from a future build is kept as text
+                // and drawn with a fallback emoji rather than dropping the session.
+                type = type,
+                startedAt = row.optLong("startedAt"),
+                seconds = row.optInt("seconds"),
+                kcal = row.optDouble("kcal", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+                heartPoints = row.optInt("heartPoints").coerceAtLeast(0),
+                metres = row.optDouble("metres", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+            )
+        }
+
+        return Snapshot(
+            days = days,
+            hours = hours,
+            water = water,
+            sessions = sessions,
+            settings = settings,
+        )
     }
+
+    /**
+     * Reads the cup sizes from a settings block, or null when the file has none.
+     *
+     * Files written before three sizes carry a single `defaultCupMl`; that becomes the first
+     * size, with 500 ml beside it, matching the two buttons those versions showed.
+     */
+    private fun cupSizes(settingsJson: JSONObject): List<Int>? {
+        settingsJson.optJSONArray("cupSizesMl")?.let { array ->
+            return UserSettings.normalizeCups((0 until array.length()).map { array.optInt(it) })
+        }
+        if (settingsJson.has("defaultCupMl")) {
+            return UserSettings.normalizeCups(listOf(settingsJson.optInt("defaultCupMl"), 500))
+        }
+        return null
+    }
+
+    /**
+     * [value] when it is an ISO date the screens can look up, else null.
+     *
+     * Every screen queries by `yyyy-MM-dd`, so a hand-edited "2026-9-5" would be stored
+     * under a key nothing ever reads. Skipping the row keeps the loss visible as a gap.
+     */
+    private fun validDate(value: String): String? =
+        runCatching { java.time.LocalDate.parse(value).toString() }.getOrNull()?.takeIf { it == value }
 
     /** Reads a file the user picked. Throws whatever the content resolver throws. */
     fun read(context: Context, source: Uri): String =
