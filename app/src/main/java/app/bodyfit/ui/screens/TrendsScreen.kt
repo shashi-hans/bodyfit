@@ -112,10 +112,6 @@ fun TrendsScreen(
     /** How many spans back from today the screen is looking. 0 is the current one. */
     var offset by rememberSaveable { mutableIntStateOf(0) }
 
-    // Changing span with an offset held would land somewhere arbitrary: four weeks back is
-    // not four days back. Every change of span returns to the present.
-    LaunchedEffect(window) { offset = 0 }
-
     LaunchedEffect(focus) {
         if (focus == null) return@LaunchedEffect
         metric = focus
@@ -126,6 +122,10 @@ fun TrendsScreen(
     }
 
     val today = remember(activeDate) { Dates.parse(activeDate) }
+    // A weekday names a day within a week; across a month "Mon" matches four of them, so
+    // the month view names the date.
+    fun barLabel(date: String): String =
+        if (window == Window.MONTH) Dates.dayLabel(date) else Dates.weekdayLabel(date)
     val anchor = remember(today, window, offset) {
         when (window) {
             Window.DAY -> today.minusDays(offset.toLong())
@@ -229,6 +229,11 @@ fun TrendsScreen(
                     FilterChip(
                         selected = option == window,
                         onClick = {
+                            // Changing span with an offset held would land somewhere
+                            // arbitrary: four weeks back is not four days back. Reset here
+                            // rather than in an effect, which would also fire on every
+                            // rotation and throw away the saved offset.
+                            if (option != window) offset = 0
                             window = option
                             selectedBar = null
                         },
@@ -245,7 +250,12 @@ fun TrendsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 IconButton(
-                    onClick = { offset += 1 },
+                    // The tapped bar is an index into the span, so it is cleared with the
+                    // span: kept, it would silently point at a different day.
+                    onClick = {
+                        offset += 1
+                        selectedBar = null
+                    },
                     enabled = canGoBack,
                 ) {
                     Icon(
@@ -263,7 +273,10 @@ fun TrendsScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 IconButton(
-                    onClick = { offset -= 1 },
+                    onClick = {
+                        offset -= 1
+                        selectedBar = null
+                    },
                     enabled = canGoForward,
                 ) {
                     Icon(
@@ -370,7 +383,7 @@ fun TrendsScreen(
                             index != null && window == Window.DAY ->
                                 "${Dates.hourRangeLabel(index)}: ${metric.formatWithUnit(values[index])}"
                             index != null && days.getOrNull(index) != null ->
-                                "${Dates.weekdayLabel(days[index].date)}: ${metric.formatWithUnit(values[index])}"
+                                "${barLabel(days[index].date)}: ${metric.formatWithUnit(values[index])}"
                             window == Window.DAY -> "Tap a bar to read one hour."
                             else -> "Tap a bar to see that day hour by hour."
                         },
@@ -500,7 +513,7 @@ fun TrendsScreen(
                         SummaryRow(
                             label = "🏅 Best day",
                             value = bestIndex?.let {
-                                "${Dates.weekdayLabel(days[it].date)} · ${metric.formatWithUnit(values[it])}"
+                                "${barLabel(days[it].date)} · ${metric.formatWithUnit(values[it])}"
                             } ?: "No activity yet",
                         )
                         SummaryRow(
@@ -552,7 +565,7 @@ fun TrendsScreen(
                                     text = if (window == Window.DAY) {
                                         Dates.hourRangeLabel(index)
                                     } else {
-                                        Dates.weekdayLabel(days[index].date)
+                                        barLabel(days[index].date)
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

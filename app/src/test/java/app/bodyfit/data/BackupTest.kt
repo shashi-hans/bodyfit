@@ -140,7 +140,8 @@ class BackupTest {
     @Test
     fun `short, duplicate or out-of-range cup lists still give three sizes`() {
         assertEquals(listOf(200, 250, 1_000), UserSettings.normalizeCups(listOf(5_000, 5_000)))
-        assertEquals(listOf(50, 200, 250), UserSettings.normalizeCups(listOf(10)))
+        assertEquals(listOf(100, 200, 250), UserSettings.normalizeCups(listOf(10)))
+        assertEquals(listOf(200, 300, 350), UserSettings.normalizeCups(listOf(330, 290)))
         assertEquals(listOf(200, 250, 500), UserSettings.normalizeCups(emptyList()))
     }
 }

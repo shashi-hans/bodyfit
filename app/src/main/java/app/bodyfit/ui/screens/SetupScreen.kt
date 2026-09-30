@@ -21,6 +21,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,7 +80,9 @@ fun SetupScreen(
     val ready = heightSet && weightSet && ageSet && sex != null
 
     val scope = rememberCoroutineScope()
-    var restoring by rememberSaveable { mutableStateOf(false) }
+    // Not saveable: the coroutine that clears it does not survive a rotation, so a saved
+    // true would keep both buttons disabled for good.
+    var restoring by remember { mutableStateOf(false) }
     var restoreError by rememberSaveable { mutableStateOf<String?>(null) }
 
     // The picker rather than a path: no storage permission, and the app never sees a file

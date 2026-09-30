@@ -349,7 +349,7 @@ testable without a database or a clock.
 
 | Number | Rule |
 | --- | --- |
-| Wellbeing score | 100 adjusted for BMI band, 14-day average steps, age and smoking |
+| Wellbeing score | 100 adjusted for BMI band, average steps over the 13 full days before today (days before the first record left out), age and smoking |
 | Recommended goals | Steps by age band (10,000 under 40, 8,500 to 59, 7,000 from 60); heart points and move minutes from the WHO's 150 moderate minutes a week; water at 35 ml/kg with an EFSA floor of 2.0 L for men and 1.6 L for women; calories from the recommended steps costed through the tracker's own MET model |
 | Resting burn | Mifflin-St Jeor from weight, height, age and sex. Unspecified sex takes the midpoint of the two sex terms, wrong by about 83 kcal either way |
 
@@ -398,18 +398,20 @@ backup never erases newer tracking. Water entries and hourly rows for a restored
 replaced rather than appended, so restoring the same file twice cannot double a total. The
 tracker switch is not restored: whether this phone is counting is a property of the phone.
 
-### Weekly backup
+### Daily backup
 
 The backup runs on a schedule from the moment the app is installed, with nothing to switch
 on. A WorkManager job rewrites `Download/backup/bodyfit-backup.json` every day.
 
-One file, never a second one. The row MediaStore created is remembered in the backup's own
-settings, so every later write reuses it rather than looking the file up by name again; a
-lookup that misses ends in an insert, and MediaStore answers an insert of a name that already
-exists with `bodyfit-backup (1).json` instead of failing. An insert also deletes any numbered
-copies the app still owns. The liveness check on the remembered row is a query, not an open
-for writing: MediaStore truncates on a `w` open, so checking that way would empty the very
-file it was checking.
+One file, never a second one, and never opened for writing in place. Each run writes into a
+new pending row named `bodyfit-backup (writing).json`, and only once that is complete deletes
+the old row and renames the new one. A full disk or a killed process mid-write therefore
+leaves the previous backup whole, which matters because it is the only copy. The row is
+remembered in the backup's own settings, and the liveness check on it is a query rather than
+an open. After each write the app deletes any numbered copies it still owns in
+`Download/backup`, matched by that exact folder so a folder such as `Download/backup-old` is
+never touched. Android 9 and older write a temporary file beside the old one and rename it
+over.
 
 The one case beyond reach is a reinstall or a cleared app. Ownership of the old row is gone
 with the old install, and reading another owner's row needs All files access, which Play
@@ -425,9 +427,7 @@ orphaned file on every phone.
 That folder rather than the app's own is so the file survives an uninstall and a file
 manager can copy it off the phone. Android 10 onwards an app cannot create a folder at the
 root of shared storage, so the write goes through MediaStore's Downloads collection, which
-needs no permission and no prompt. The row is looked up by name and reused; a repeated
-insert would answer with `bodyfit-weekly-backup (1).json` and leave the user a year of
-them. The cost of sitting outside the app is that any app granted storage access can read
+needs no permission and no prompt. The cost of sitting outside the app is that any app granted storage access can read
 it, and the file holds the whole history. The page says so.
 
 "Choose a file" points the schedule anywhere else instead. The app takes persistable URI
@@ -437,11 +437,12 @@ security error nobody is present to see.
 One file is overwritten rather than a new one written each time, so a year does not leave
 52 copies on a drive. The stream is opened in `wt` mode: without truncation a shorter
 backup would leave the tail of the previous one behind and produce a file that is not valid
-JSON.
+JSON. That file is still rewritten in place: a document picked through the system dialog
+cannot be replaced atomically on every provider.
 
 The job waits for the battery not to be low, so a write can land a few hours late. It is
 re-asserted on every launch, because an app update or a force stop can drop the schedule
-and a weekly backup that quietly stopped is worse than one that never existed. A revoked
+and a daily backup that quietly stopped is worse than one that never existed. A revoked
 or deleted file is recorded and shown on the page rather than retried forever.
 
 `format` is 3. Older files still restore: a version 1 file carries no hourly rows and a

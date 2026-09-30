@@ -2,7 +2,6 @@ package app.bodyfit.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -23,6 +22,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -40,6 +43,7 @@ import app.bodyfit.R
 import app.bodyfit.data.Dates
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
+import app.bodyfit.sensor.Permissions
 import app.bodyfit.data.Volume
 import app.bodyfit.ui.components.BackHeader
 import app.bodyfit.ui.components.GoalSlider
@@ -234,11 +238,16 @@ fun LockScreenCardScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    // Re-read on every recomposition rather than remembering: the user leaves for system
-    // settings and comes back, and a cached answer would still show the old state.
-    val exempt = remember(contentPadding) {
-        context.getSystemService(PowerManager::class.java)
-            ?.isIgnoringBatteryOptimizations(context.packageName) ?: false
+    // Re-read on every return to the app: the user leaves for system settings from this
+    // page, and a cached answer would still show the old state when they come back.
+    var exempt by remember { mutableStateOf(Permissions.isExemptFromBatteryOptimisation(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) exempt = Permissions.isExemptFromBatteryOptimisation(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     MenuPage("Lock screen card", onBack, contentPadding, modifier) {

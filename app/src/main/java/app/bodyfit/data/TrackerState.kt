@@ -44,9 +44,6 @@ class TrackerStateRepository(private val context: Context) {
         context.trackerStore.edit { it[Keys.SESSION_STARTED_AT] = value }
     }
 
-    suspend fun sessionStartedAt(): Long =
-        context.trackerStore.data.map { it[Keys.SESSION_STARTED_AT] ?: 0L }.first()
-
     /** Last raw sensor reading, or -1 when the tracker has not seen the sensor yet. */
     suspend fun lastRawCount(): Long =
         context.trackerStore.data.map { it[Keys.LAST_RAW_COUNT] ?: -1L }.first()

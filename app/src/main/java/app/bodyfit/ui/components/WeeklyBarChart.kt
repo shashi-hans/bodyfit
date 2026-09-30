@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -74,6 +76,9 @@ fun WeeklyBarChart(
         setOfNotNull(todayIndex.takeIf { todayHasValue }, bestIndex)
     }
 
+    // The gesture block outlives recompositions that keep its keys, so it reads the latest
+    // callback through this rather than the one it was first built with.
+    val currentOnSelect by rememberUpdatedState(onSelect)
     Canvas(
         modifier = modifier
             .fillMaxWidth()
@@ -83,7 +88,7 @@ fun WeeklyBarChart(
                     if (values.isEmpty()) return@detectTapGestures
                     val slot = size.width.toFloat() / values.size
                     val index = (offset.x / slot).toInt().coerceIn(0, values.lastIndex)
-                    onSelect(if (index == selectedIndex) null else index)
+                    currentOnSelect(if (index == selectedIndex) null else index)
                 }
             }
     ) {

@@ -28,13 +28,15 @@ import java.util.concurrent.TimeUnit
 
 private val Context.backupStore: DataStore<Preferences> by preferencesDataStore(name = "auto_backup")
 
+private val DEFAULT_FILE_NAME = Backup.autoBackupFileName()
+
 /**
- * Undated, because the scheduled backup rewrites one file rather than adding to a pile.
+ * The name a new backup is written under before it replaces the old one.
  *
- * The cadence is not in the name either. It was once, and moving from weekly to daily then
- * meant either a lie in the filename or an orphaned file on every phone.
+ * Shaped like MediaStore's own numbered copies, so the sweep for stray copies also clears
+ * one left behind by a process killed between the write and the rename.
  */
-private const val DEFAULT_FILE_NAME = "bodyfit-backup.json"
+private const val PENDING_FILE_NAME = "bodyfit-backup (writing).json"
 
 /** Its own folder, so a file manager shows the backup apart from anything else the app keeps. */
 private const val DEFAULT_DIR_NAME = "backup"
@@ -48,6 +50,15 @@ private const val DEFAULT_DIR_NAME = "backup"
  * so `backup` is a folder inside it.
  */
 private val DEFAULT_RELATIVE_PATH = "${Environment.DIRECTORY_DOWNLOADS}/$DEFAULT_DIR_NAME"
+
+/**
+ * Matches the backup folder exactly. A prefix match would also take in a folder such as
+ * `Download/backup-old`, and the sweep for stray copies would then delete files there.
+ * MediaStore stores the path with a trailing slash; both spellings are accepted.
+ */
+private val IN_BACKUP_FOLDER =
+    "(${MediaStore.Downloads.RELATIVE_PATH} = ? OR ${MediaStore.Downloads.RELATIVE_PATH} = ?)"
+private val BACKUP_FOLDER_ARGS = arrayOf("$DEFAULT_RELATIVE_PATH/", DEFAULT_RELATIVE_PATH)
 
 /**
  * Where the daily backup writes, and when it last ran.
@@ -94,28 +105,40 @@ class AutoBackupSettings(private val context: Context) {
     /**
      * Writes [json] over the default file in `Download/backup`, creating it the first time.
      *
-     * The same row is reused rather than a second file inserted, because MediaStore answers a
-     * repeated insert with `bodyfit-backup (1).json` and the user would end up with a
-     * year of them. Android 9 and older take the app's own external folder instead, for
-     * the reason given at that branch.
+     * The old file is never opened for writing. The new content goes into a pending row
+     * first, and only once it is complete is the old row deleted and the new one given the
+     * default name. A full disk or a killed process mid-write therefore leaves the previous
+     * backup whole, which matters because it is the user's only copy. Android 9 and older
+     * take the app's own external folder instead, for the reason given at that branch.
      */
     suspend fun writeDefault(json: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val resolver = context.contentResolver
             val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
 
-            // Three ways to reach the same row, cheapest first: the one written last time,
-            // then a lookup by name, then a fresh insert. Only the third can produce a new
-            // file, and it records what it made so the next write takes the first path.
-            val remembered = rememberedDefaultUri()
-            val uri = remembered?.takeIf { stillExists(it) }
-                ?: existingDefaultUri(collection)
-                ?: insertDefault(resolver, collection)
-
-            // "wt" truncates, so a shorter backup cannot leave the tail of the last one behind.
-            resolver.openOutputStream(uri, "wt")?.use { it.write(json.toByteArray()) }
-                ?: error("could not open the backup file for writing")
-            if (uri != remembered) rememberDefaultUri(uri)
+            val old = rememberedDefaultUri()?.takeIf { stillExists(it) } ?: existingDefaultUri(collection)
+            val fresh = insertPending(resolver, collection)
+            try {
+                resolver.openOutputStream(fresh, "w")?.use { it.write(json.toByteArray()) }
+                    ?: error("could not open the backup file for writing")
+                resolver.update(fresh, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+            } catch (e: Exception) {
+                runCatching { resolver.delete(fresh, null, null) }
+                throw e
+            }
+            // From here a complete copy exists under the pending name, so losing the process
+            // costs at most a file with the wrong name, never the backup itself.
+            if (old != null) resolver.delete(old, null, null)
+            runCatching {
+                resolver.update(
+                    fresh,
+                    ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, DEFAULT_FILE_NAME) },
+                    null,
+                    null,
+                )
+            }
+            rememberDefaultUri(fresh)
+            deleteOurOtherCopies(collection, keep = fresh)
         } else {
             // Android 9 and older have no Downloads collection, and writing to the public
             // folder there needs WRITE_EXTERNAL_STORAGE, which this app does not ask for:
@@ -125,7 +148,14 @@ class AutoBackupSettings(private val context: Context) {
             val dir = context.getExternalFilesDir(DEFAULT_DIR_NAME)
                 ?: File(context.filesDir, DEFAULT_DIR_NAME)
             dir.mkdirs()
-            File(dir, DEFAULT_FILE_NAME).writeText(json)
+            // Written beside the old file and renamed over it, so a failed write leaves the
+            // previous backup in place.
+            val pending = File(dir, PENDING_FILE_NAME)
+            pending.writeText(json)
+            if (!pending.renameTo(File(dir, DEFAULT_FILE_NAME))) {
+                pending.delete()
+                error("could not replace the backup file")
+            }
         }
     }
 
@@ -151,29 +181,29 @@ class AutoBackupSettings(private val context: Context) {
     }.getOrDefault(false)
 
     /**
-     * Creates the file, then removes any earlier copy this app made under a numbered name.
+     * Creates the row the next backup is written into, hidden from other apps until done.
      *
-     * MediaStore answers an insert of a name that already exists by inventing
-     * "bodyfit-backup (1).json" rather than failing, so a reinstall that cannot see its own
-     * previous row leaves one behind. Deleting the ones this app owns keeps that to the
-     * single file the user is promised; a copy owned by a previous install of the app is
-     * beyond reach, because reading another owner's row needs All files access.
+     * A pending row that is never finished is removed by MediaStore on its own after a
+     * week, so an interrupted write cannot leave a half file where a user would find it.
      */
-    private fun insertDefault(resolver: android.content.ContentResolver, collection: Uri): Uri {
-        val created = resolver.insert(
+    private fun insertPending(resolver: android.content.ContentResolver, collection: Uri): Uri =
+        resolver.insert(
             collection,
             ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, DEFAULT_FILE_NAME)
-                put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                put(MediaStore.Downloads.DISPLAY_NAME, PENDING_FILE_NAME)
+                put(MediaStore.Downloads.MIME_TYPE, Backup.MIME_TYPE)
                 put(MediaStore.Downloads.RELATIVE_PATH, DEFAULT_RELATIVE_PATH)
+                put(MediaStore.Downloads.IS_PENDING, 1)
             },
-        ) ?: error("could not create $DEFAULT_RELATIVE_PATH/$DEFAULT_FILE_NAME")
-        deleteOurOtherCopies(collection, keep = created)
-        return created
-    }
+        ) ?: error("could not create $DEFAULT_RELATIVE_PATH/$PENDING_FILE_NAME")
 
     /**
      * Removes the numbered copies MediaStore made of the default file, and nothing else.
+     *
+     * MediaStore answers an insert or rename to a name that already exists by inventing
+     * "bodyfit-backup (1).json" rather than failing. Deleting the ones this app owns keeps
+     * that to the single file the user is promised; a copy owned by a previous install of
+     * the app is beyond reach, because reading another owner's row needs All files access.
      *
      * Matched by the exact default name and by "bodyfit-backup (2).json" and its like,
      * never by a prefix. A dated export the user saved by hand is called
@@ -187,8 +217,8 @@ class AutoBackupSettings(private val context: Context) {
             context.contentResolver.query(
                 collection,
                 arrayOf(MediaStore.Downloads._ID),
-                "${MediaStore.Downloads.RELATIVE_PATH} LIKE ? AND ($name = ? OR $name LIKE ?)",
-                arrayOf("$DEFAULT_RELATIVE_PATH%", DEFAULT_FILE_NAME, "bodyfit-backup (%).json"),
+                "$IN_BACKUP_FOLDER AND ($name = ? OR $name LIKE ?)",
+                arrayOf(*BACKUP_FOLDER_ARGS, DEFAULT_FILE_NAME, "bodyfit-backup (%).json"),
                 null,
             )?.use { cursor ->
                 while (cursor.moveToNext()) {
@@ -205,8 +235,8 @@ class AutoBackupSettings(private val context: Context) {
         context.contentResolver.query(
             collection,
             arrayOf(MediaStore.Downloads._ID),
-            "${MediaStore.Downloads.RELATIVE_PATH} LIKE ? AND ${MediaStore.Downloads.DISPLAY_NAME} = ?",
-            arrayOf("$DEFAULT_RELATIVE_PATH%", DEFAULT_FILE_NAME),
+            "$IN_BACKUP_FOLDER AND ${MediaStore.Downloads.DISPLAY_NAME} = ?",
+            arrayOf(*BACKUP_FOLDER_ARGS, DEFAULT_FILE_NAME),
             null,
         )?.use { cursor ->
             if (cursor.moveToFirst()) {
@@ -296,19 +326,24 @@ class AutoBackupWorker(
             if (target == null) {
                 settings.writeDefault(json)
             } else {
-                // "wt" truncates first. Without it a shorter backup would leave the tail of
-                // the previous one behind and produce a file that is not valid JSON.
-                applicationContext.contentResolver.openOutputStream(target, "wt")?.use {
-                    it.write(json.toByteArray())
-                } ?: error("could not open the backup file for writing")
+                Backup.write(applicationContext, target, json)
             }
             settings.recordRun(System.currentTimeMillis(), error = null)
             Result.success()
         } catch (e: SecurityException) {
-            // The user revoked access, or moved or deleted the file. Retrying cannot fix
-            // either, so the failure is recorded for the backup page to show.
+            // The user revoked access. Retrying cannot fix that, so the failure is recorded
+            // for the backup page to show.
             settings.recordRun(System.currentTimeMillis(), error = "No longer allowed to write there")
             Result.failure()
+        } catch (e: java.io.FileNotFoundException) {
+            // For a file the user chose, it was moved or deleted, and retrying with backoff
+            // would fail the same way forever. For the default location the same exception
+            // can mean storage is briefly unavailable, which a retry does fix.
+            settings.recordRun(
+                System.currentTimeMillis(),
+                error = if (target != null) "The backup file is no longer there" else e.message ?: "Backup failed",
+            )
+            if (target != null) Result.failure() else Result.retry()
         } catch (e: Exception) {
             settings.recordRun(System.currentTimeMillis(), error = e.message ?: "Backup failed")
             Result.retry()

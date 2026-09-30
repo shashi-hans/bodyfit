@@ -136,10 +136,11 @@ fun BodyFitAppScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.onResumed()
-                permissionNoticeSeen = false
-            }
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.onResumed()
+            // On start, not resume: the system permission prompt pauses the activity
+            // without stopping it, and resetting on resume reopened this dialog the moment
+            // the user refused. Coming back from Settings does stop it, so that still shows.
+            if (event == Lifecycle.Event.ON_START) permissionNoticeSeen = false
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -246,7 +247,7 @@ fun BodyFitAppScreen(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         viewModel.enableAutoBackup(uri)
-        scope.launch { snackbar.showSnackbar("Weekly backup on") }
+        scope.launch { snackbar.showSnackbar("Daily backup on") }
     }
 
     Scaffold(

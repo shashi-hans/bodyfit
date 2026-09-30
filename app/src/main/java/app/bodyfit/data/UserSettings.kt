@@ -91,12 +91,14 @@ data class UserSettings(
         /**
          * Returns exactly [CUP_COUNT] distinct in-range sizes, smallest first.
          *
-         * Out-of-range values are clamped, duplicates dropped, and missing slots filled from
+         * Each size is snapped to the nearest of [CUP_SIZES_ML], duplicates dropped, and missing slots filled from
          * [DEFAULT_CUP_SIZES_ML], so a short or odd list from storage or a backup still
          * gives three usable buttons.
          */
         fun normalizeCups(sizes: List<Int>): List<Int> =
-            (sizes.map { it.coerceIn(CUP_RANGE) } + DEFAULT_CUP_SIZES_ML + CUP_SIZES_ML)
+            // Snapped to the nearest offered size, so every saved cup has a chip on the
+            // Cup sizes page and can be deselected there.
+            (sizes.map { size -> CUP_SIZES_ML.minBy { kotlin.math.abs(it - size) } } + DEFAULT_CUP_SIZES_ML + CUP_SIZES_ML)
                 .distinct()
                 .take(CUP_COUNT)
                 .sorted()

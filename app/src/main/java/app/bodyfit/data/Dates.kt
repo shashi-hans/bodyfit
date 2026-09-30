@@ -35,6 +35,10 @@ object Dates {
         }
     }
 
+    /** Local noon on [key], as epoch millis. A neutral time for a drink whose moment is unknown. */
+    fun noonOf(key: String): Long =
+        parse(key).atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
     /** The local date an epoch timestamp falls on, as an ISO key. */
     fun of(epochMillis: Long): String =
         Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate().toString()
@@ -77,9 +81,11 @@ object Dates {
      * Used to re-anchor the screens on the day boundary. Computed from the calendar rather
      * than a fixed 24 hours so it survives daylight saving and manual clock changes.
      */
-    fun millisUntilTomorrow(now: LocalDateTime = LocalDateTime.now()): Long {
-        val tomorrow = now.toLocalDate().plusDays(1).atStartOfDay()
-        return maxOf(1L, Duration.between(now, tomorrow).toMillis())
+    fun millisUntilTomorrow(now: LocalDateTime = LocalDateTime.now(), zone: ZoneId = ZoneId.systemDefault()): Long {
+        // Between instants, not wall-clock times: a spring-forward night is 23 hours long,
+        // and a LocalDateTime difference would wake an hour past midnight.
+        val tomorrow = now.toLocalDate().plusDays(1).atStartOfDay(zone)
+        return maxOf(1L, Duration.between(now.atZone(zone), tomorrow).toMillis())
     }
 
     /** The last [n] date keys ending today, oldest first. */

@@ -26,6 +26,8 @@ import app.bodyfit.notification.ActivityNotification
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.launch
 
 /**
@@ -54,15 +56,28 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
     private val softwarePedometer = SoftwarePedometer()
 
     private val handler = Handler(Looper.getMainLooper())
+
+    /**
+     * Held for the length of a flush. A tick that finds it taken skips its turn: a write
+     * slower than [TICK_MS] would otherwise overlap the next one, and the older flush could
+     * persist an older step baseline last, which a restart would count again.
+     */
+    private val flushLock = Mutex()
+
     private val ticker = object : Runnable {
         override fun run() {
             lifecycleScope.launch {
+                if (!flushLock.tryLock()) return@launch
                 // A write can fail: the disk is full, the row is locked, the process is
                 // shutting down. An uncaught throw here reaches the default handler and
                 // takes the whole service down, losing the counter with it, so the tick
                 // swallows it and the next one retries with the steps still banked.
-                runCatching { flush() }
-                    .onFailure { Log.w(TAG, "tick failed, retrying on the next one", it) }
+                try {
+                    runCatching { flush() }
+                        .onFailure { Log.w(TAG, "tick failed, retrying on the next one", it) }
+                } finally {
+                    flushLock.unlock()
+                }
             }
             handler.postDelayed(this, TICK_MS)
         }
@@ -138,7 +153,9 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        val restart = PendingIntent.getService(
+        // A foreground-service intent: a plain getService from an alarm is a background
+        // start, which Android 8 and later refuse.
+        val restart = PendingIntent.getForegroundService(
             this,
             RESTART_REQUEST,
             Intent(applicationContext, StepTrackerService::class.java),
@@ -173,8 +190,11 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
      */
     private fun onAcceleration(event: SensorEvent) {
         if (event.values.size < 3) return
+        // The sample's own time, not its arrival: the sensor delivers in one-second batches,
+        // and one arrival time for a whole batch would squeeze its steps below the minimum
+        // gap between footfalls.
         val counted = softwarePedometer.onSample(
-            timestampMs = System.currentTimeMillis(),
+            timestampMs = event.timestamp / 1_000_000L,
             x = event.values[0],
             y = event.values[1],
             z = event.values[2],
@@ -337,7 +357,10 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
             val date = Dates.today()
             // DataStore's flow emits from memory after the first read and only on a write, so
             // combining it here adds no disk read per step tick.
+            // Redrawn only when something the card shows has changed. The day's row is
+            // rewritten every tick while walking, often with nothing visible moving.
             combine(repository.observeDay(date), repository.settings) { record, current -> record to current }
+                .distinctUntilChangedBy { (record, current) -> ActivityNotification.contentKey(record, current) }
                 .collectLatest { (record, current) ->
                     if (!Permissions.hasNotifications(this@StepTrackerService)) return@collectLatest
                     val card = ActivityNotification.build(this@StepTrackerService, record, current)

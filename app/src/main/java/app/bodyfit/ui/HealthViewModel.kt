@@ -162,7 +162,7 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
 
     private val autoBackup = AutoBackupSettings(application)
 
-    /** Where the weekly backup writes, or null when it is off. */
+    /** Where the daily backup writes, or null when it is off. */
     val autoBackupTarget: StateFlow<Uri?> = autoBackup.target
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -175,7 +175,7 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     /** Where the backup goes when nothing has been chosen. */
     val autoBackupDefaultLabel: String = autoBackup.defaultLocationLabel()
 
-    /** Remembers the chosen file, writes it once now, and schedules the weekly repeat. */
+    /** Remembers the chosen file, writes it once now, and schedules the daily repeat. */
     fun enableAutoBackup(uri: Uri) = viewModelScope.launch {
         autoBackup.setTarget(uri)
         val context = getApplication<Application>()

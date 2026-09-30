@@ -60,6 +60,22 @@ object ActivityNotification {
         .setContentText("Body Fit is watching the step sensor")
         .build()
 
+    /**
+     * Everything [build] prints, so a caller can skip a redraw that would change nothing.
+     * Kept beside [build] so a figure added to the card is added here in the same edit.
+     */
+    fun contentKey(record: DailyRecord, settings: UserSettings): List<Any> = listOf(
+        record.steps,
+        record.activeKcal.toInt(),
+        record.heartPoints,
+        record.moveMinutes,
+        record.waterMl,
+        settings.heightCm,
+        settings.stepGoal,
+        settings.waterGoalMl,
+        settings.cupSizesMl,
+    )
+
     fun build(context: Context, record: DailyRecord, settings: UserSettings): Notification {
         val distanceKm = Metrics.distanceKm(record.steps, settings.heightCm)
         val kcal = record.activeKcal.toInt()

@@ -1,6 +1,8 @@
 package app.bodyfit.data
 
 import android.content.Context
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
@@ -49,16 +51,19 @@ class HealthRepository(context: Context) {
      * perfectly valid backup of nothing, and writing that over the only good copy is how a
      * user who cleared the app's data loses the history they cleared it to recover.
      */
-    suspend fun hasAnythingToBackUp(): Boolean = dao.allDaysOnce().isNotEmpty()
+    suspend fun hasAnythingToBackUp(): Boolean = dao.hasAnyDay()
 
     /** Snapshot for the backup writer. */
-    suspend fun backupJson(): String = Backup.toJson(
-        days = allDays(),
-        hours = dao.allHoursOnce(),
-        water = dao.allWaterEntries(),
-        sessions = dao.allSessionsOnce(),
-        settings = currentSettings(),
-    )
+    suspend fun backupJson(): String {
+        val rows = dao.backupRows()
+        return Backup.toJson(
+            days = rows.days,
+            hours = rows.hours,
+            water = rows.water,
+            sessions = rows.sessions,
+            settings = currentSettings(),
+        )
+    }
 
     /**
      * Writes a backup file back into the database and the settings store.
@@ -72,8 +77,13 @@ class HealthRepository(context: Context) {
      */
     suspend fun restoreJson(json: String): Int {
         val snapshot = Backup.fromJson(json, currentSettings())
-        dao.restore(snapshot.days, snapshot.hours, snapshot.water, snapshot.sessions)
-        userSettings.replace(snapshot.settings)
+        // Not cancellable once writing starts: callers run this from screen scopes that a
+        // rotation cancels, and stopping between the two writes would leave the history
+        // restored but the settings not.
+        withContext(NonCancellable) {
+            dao.restore(snapshot.days, snapshot.hours, snapshot.water, snapshot.sessions)
+            userSettings.replace(snapshot.settings)
+        }
         return snapshot.days.size
     }
 
@@ -142,8 +152,10 @@ class HealthRepository(context: Context) {
         if (seconds < MIN_SESSION_SECONDS) return null
         val minutes = seconds / 60.0
         val weight = currentSettings().weightKg
+        // Dated by its start, the same moment its hour is taken from, so a run across
+        // midnight lands on one day and one hour rather than an hour of the next day.
         val session = ExerciseSession(
-            date = Dates.today(),
+            date = Dates.of(startedAt),
             type = type.name,
             startedAt = startedAt,
             seconds = seconds,

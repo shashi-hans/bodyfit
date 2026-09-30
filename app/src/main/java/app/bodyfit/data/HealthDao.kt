@@ -28,6 +28,18 @@ interface HealthDao {
     @Query("SELECT * FROM daily_record ORDER BY date")
     suspend fun allDaysOnce(): List<DailyRecord>
 
+    @Query("SELECT EXISTS(SELECT 1 FROM daily_record)")
+    suspend fun hasAnyDay(): Boolean
+
+    /** Every table the backup carries, read in one transaction so the rows agree. */
+    @Transaction
+    suspend fun backupRows(): BackupRows = BackupRows(
+        days = allDaysOnce(),
+        hours = allHoursOnce(),
+        water = allWaterEntries(),
+        sessions = allSessionsOnce(),
+    )
+
     @Query("SELECT * FROM daily_record WHERE date = :date")
     suspend fun getDay(date: String): DailyRecord?
 
@@ -189,6 +201,10 @@ interface HealthDao {
                 updatedAt = System.currentTimeMillis(),
             )
         )
+        // The hour is worked out again from the start time in today's timezone. After a
+        // change of timezone that can name a different day, and then the hour is left as it
+        // is rather than taken off the wrong one.
+        if (Dates.of(session.startedAt) != session.date) return
         val hour = Dates.hourOf(session.startedAt)
         val slot = getHour(session.date, hour) ?: return
         upsertHour(
@@ -233,6 +249,15 @@ interface HealthDao {
         water.filter { it.date in dateSet }.forEach { insertWaterEntry(it.copy(id = 0)) }
         hours.filter { it.date in dateSet }.forEach { upsertHour(it) }
         sessions.filter { it.date in dateSet }.forEach { insertSession(it.copy(id = 0)) }
+        // A day total with no drinks behind it, from a file whose entries were skipped or
+        // never written, becomes one entry at noon. The total then survives the next drink
+        // logged that day, which recomputes the day from its entries.
+        val datesWithDrinks = water.map { it.date }.toSet()
+        days.filter { it.waterMl > 0 && it.date !in datesWithDrinks }.forEach { day ->
+            insertWaterEntry(
+                WaterEntry(date = day.date, amountMl = day.waterMl, loggedAt = Dates.noonOf(day.date)),
+            )
+        }
         days.forEach { day ->
             upsertDay(day.copy(waterMl = waterTotal(day.date), updatedAt = now))
         }
@@ -245,3 +270,11 @@ interface HealthDao {
         upsertDay(current.copy(waterMl = total, updatedAt = System.currentTimeMillis()))
     }
 }
+
+/** A consistent read of every table a backup carries. */
+data class BackupRows(
+    val days: List<DailyRecord>,
+    val hours: List<HourlyRecord>,
+    val water: List<WaterEntry>,
+    val sessions: List<ExerciseSession>,
+)

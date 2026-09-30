@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -52,6 +53,7 @@ import app.bodyfit.ui.components.Wellness
 import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.theme.LocalViz
 import app.bodyfit.ui.theme.color
+import kotlinx.coroutines.delay
 import java.time.LocalTime
 import java.util.Locale
 
@@ -78,10 +80,17 @@ fun TodayScreen(
     var sourceOf by rememberSaveable { mutableStateOf<Metric?>(null) }
     val stepProgress = progressOf(Metric.STEPS, record, settings)
     val weekSteps = week.sumOf { it.steps }
+    // Ticks once a minute, so figures that follow the clock rather than the data, the
+    // resting share of the calories and the greeting, move while the phone sits still.
+    val minute by produceState(System.currentTimeMillis() / 60_000L) {
+        while (true) {
+            delay(60_000L - System.currentTimeMillis() % 60_000L)
+            value = System.currentTimeMillis() / 60_000L
+        }
+    }
     // Active plus the resting burn the day has accrued, which is the figure another tracker
-    // shows as "calories". Recomputed whenever the day's row changes, which is often enough
-    // that the resting share never sits more than a few minutes behind the clock.
-    val totalKcal = remember(record, settings, activeDate) {
+    // shows as "calories".
+    val totalKcal = remember(record, settings, activeDate, minute) {
         record.activeKcal + Insights.restingKcalSoFar(settings, Dates.elapsedFraction(activeDate))
     }
 
@@ -90,7 +99,7 @@ fun TodayScreen(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { Header(name = settings.name, onOpenMenu = onOpenMenu) }
+        item { Header(name = settings.name, minute = minute, onOpenMenu = onOpenMenu) }
 
         item {
             SectionCard(
@@ -478,8 +487,8 @@ private fun PlainStat(
  * misaligned copy of the text.
  */
 @Composable
-private fun Header(name: String, onOpenMenu: () -> Unit) {
-    val now = remember { LocalTime.now() }
+private fun Header(name: String, minute: Long, onOpenMenu: () -> Unit) {
+    val now = remember(minute) { LocalTime.now() }
     val greeting = when (now.hour) {
         in 5..11 -> "Good morning ☀️"
         in 12..16 -> "Good afternoon 🌤️"

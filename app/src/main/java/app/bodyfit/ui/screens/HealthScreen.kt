@@ -192,14 +192,15 @@ fun HealthScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = "👣 ${score.averageSteps} steps a day, averaged over the last 14 days",
+                        text = "👣 ${score.averageSteps} steps a day over the 13 full days before today",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "The step average divides by all 14 days, so a new install scores " +
-                            "low simply for having no history yet.",
+                        text = "A day with no steps since the first one on record counts as zero. " +
+                            "Days before the app was installed are left out, and steps only " +
+                            "count toward the score after three full days of history.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
