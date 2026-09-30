@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -105,6 +106,18 @@ private enum class Tab(val route: String, val emoji: String, val label: String) 
  * is missing. Without that permission the phone will not report steps at all, so the
  * banner sits above the content until it is granted rather than hiding in settings.
  */
+/**
+ * Switches tab the way the bottom bar does: one copy of each tab on the stack, and each
+ * tab's own scroll and state kept for when it is opened again.
+ */
+private fun NavHostController.navigateToTab(tab: Tab) {
+    navigate(tab.route) {
+        popUpTo(Tab.TODAY.route) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
 @Composable
 fun BodyFitAppScreen(
     activityPermissionGranted: Boolean,
@@ -252,11 +265,7 @@ fun BodyFitAppScreen(
                             if (Tab.entries.none { it.route == currentRoute }) {
                                 navController.popBackStack()
                             }
-                            navController.navigate(tab.route) {
-                                popUpTo(Tab.TODAY.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
+                            navController.navigateToTab(tab)
                         },
                         icon = { Text(tab.emoji, style = MaterialTheme.typography.titleMedium) },
                         label = { Text(tab.label) },
@@ -305,11 +314,7 @@ fun BodyFitAppScreen(
                         },
                         onOpenTrends = { metric ->
                             trendsFocus = metric
-                            navController.navigate(Tab.TRENDS.route) {
-                                popUpTo(Tab.TODAY.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
+                            navController.navigateToTab(Tab.TRENDS)
                         },
                         contentPadding = contentPadding,
                     )

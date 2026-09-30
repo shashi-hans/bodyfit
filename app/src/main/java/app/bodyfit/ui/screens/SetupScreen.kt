@@ -3,21 +3,17 @@ package app.bodyfit.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -41,6 +37,7 @@ import app.bodyfit.data.UserSettings
 import app.bodyfit.ui.components.AppLogo
 import app.bodyfit.ui.components.GoalSlider
 import app.bodyfit.ui.components.SettingsCard
+import app.bodyfit.ui.components.SexChips
 import app.bodyfit.ui.components.WellnessNote
 import kotlinx.coroutines.launch
 
@@ -185,28 +182,7 @@ fun SetupScreen(
                         ageSet = true
                     },
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                ) {
-                    Sex.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == sex,
-                            onClick = { sex = option },
-                            label = {
-                                Text(
-                                    when (option) {
-                                        Sex.MALE -> "Male"
-                                        Sex.FEMALE -> "Female"
-                                        Sex.UNSPECIFIED -> "Prefer not to say"
-                                    }
-                                )
-                            },
-                        )
-                    }
-                }
+                SexChips(selected = sex, onSelect = { sex = it })
             }
         }
 

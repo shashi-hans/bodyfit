@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
@@ -15,14 +14,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -47,11 +41,12 @@ import app.bodyfit.data.Dates
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
 import app.bodyfit.data.Volume
+import app.bodyfit.ui.components.BackHeader
 import app.bodyfit.ui.components.GoalSlider
 import app.bodyfit.ui.components.InfoLine
 import app.bodyfit.ui.components.KeyValueRow
 import app.bodyfit.ui.components.SettingsCard
-import app.bodyfit.ui.components.Wellness
+import app.bodyfit.ui.components.SexChips
 import app.bodyfit.ui.components.WellnessNote
 
 /**
@@ -60,28 +55,6 @@ import app.bodyfit.ui.components.WellnessNote
  * Each is a whole screen with its own title and a back arrow rather than a section of the
  * goals tab, so the goals tab stays about goals and nothing has two homes.
  */
-
-/** Title row with a back arrow, drawn by every page here. */
-@Composable
-private fun MenuHeader(title: String, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
 
 /** Shared frame: a back header, then whatever the page puts in the list. */
 @Composable
@@ -97,7 +70,7 @@ private fun MenuPage(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { MenuHeader(title, onBack) }
+        item { BackHeader(title, onBack) }
         content()
         item { Spacer(Modifier.height(4.dp)) }
     }
@@ -147,28 +120,7 @@ fun AboutYouScreen(
                     format = { "$it years" },
                     onCommit = onAge,
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                ) {
-                    Sex.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == settings.sex,
-                            onClick = { onSex(option) },
-                            label = {
-                                Text(
-                                    when (option) {
-                                        Sex.MALE -> "Male"
-                                        Sex.FEMALE -> "Female"
-                                        Sex.UNSPECIFIED -> "Prefer not to say"
-                                    }
-                                )
-                            },
-                        )
-                    }
-                }
+                SexChips(selected = settings.sex, onSelect = onSex)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

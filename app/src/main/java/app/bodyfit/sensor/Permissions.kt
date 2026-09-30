@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.os.Build
+import android.os.PowerManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
@@ -102,6 +103,11 @@ object Permissions {
             Manifest.permission.ACTIVITY_RECOGNITION,
         )
     }
+
+    /** Whether the phone has already been told to leave this app running in the background. */
+    fun isExemptFromBatteryOptimisation(context: Context): Boolean =
+        context.getSystemService(PowerManager::class.java)
+            ?.isIgnoringBatteryOptimizations(context.packageName) ?: false
 
     private fun granted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED

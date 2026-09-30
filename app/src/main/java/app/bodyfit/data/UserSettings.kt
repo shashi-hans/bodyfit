@@ -79,6 +79,8 @@ data class UserSettings(
         val CALORIE_GOAL_RANGE = 100..2_000
         val HEART_POINT_GOAL_RANGE = 5..80
         val MOVE_MINUTE_GOAL_RANGE = 10..180
+        val WEEKLY_STEP_GOAL_RANGE = 10_000..200_000
+        val WEEKLY_HEART_POINT_GOAL_RANGE = 20..500
         val HEIGHT_RANGE = 120..220
         val WEIGHT_RANGE = 30..200
         val CUP_SIZES_ML = listOf(100, 150, 200, 250, 300, 350, 400, 500, 750, 1_000)
@@ -189,8 +191,9 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.CALORIE_GOAL] = value.calorieGoal.coerceIn(UserSettings.CALORIE_GOAL_RANGE)
             prefs[Keys.HEART_POINT_GOAL] = value.heartPointGoal.coerceIn(UserSettings.HEART_POINT_GOAL_RANGE)
             prefs[Keys.MOVE_MINUTE_GOAL] = value.moveMinuteGoal.coerceIn(UserSettings.MOVE_MINUTE_GOAL_RANGE)
-            prefs[Keys.WEEKLY_STEP_GOAL] = value.weeklyStepGoal.coerceAtLeast(1)
-            prefs[Keys.WEEKLY_HEART_POINT_GOAL] = value.weeklyHeartPointGoal.coerceAtLeast(1)
+            prefs[Keys.WEEKLY_STEP_GOAL] = value.weeklyStepGoal.coerceIn(UserSettings.WEEKLY_STEP_GOAL_RANGE)
+            prefs[Keys.WEEKLY_HEART_POINT_GOAL] =
+                value.weeklyHeartPointGoal.coerceIn(UserSettings.WEEKLY_HEART_POINT_GOAL_RANGE)
             prefs[Keys.CUP_SIZES] = formatCups(value.cupSizesMl)
             prefs[Keys.AGE] = value.age.coerceIn(UserSettings.AGE_RANGE)
             prefs[Keys.SMOKER] = value.smoker
@@ -261,8 +264,10 @@ class UserSettingsRepository(private val context: Context) {
     suspend fun setMoveMinuteGoal(value: Int) =
         putInt(Keys.MOVE_MINUTE_GOAL, value.coerceIn(UserSettings.MOVE_MINUTE_GOAL_RANGE))
 
-    suspend fun setWeeklyStepGoal(value: Int) = putInt(Keys.WEEKLY_STEP_GOAL, value.coerceAtLeast(1))
-    suspend fun setWeeklyHeartPointGoal(value: Int) = putInt(Keys.WEEKLY_HEART_POINT_GOAL, value.coerceAtLeast(1))
+    suspend fun setWeeklyStepGoal(value: Int) =
+        putInt(Keys.WEEKLY_STEP_GOAL, value.coerceIn(UserSettings.WEEKLY_STEP_GOAL_RANGE))
+    suspend fun setWeeklyHeartPointGoal(value: Int) =
+        putInt(Keys.WEEKLY_HEART_POINT_GOAL, value.coerceIn(UserSettings.WEEKLY_HEART_POINT_GOAL_RANGE))
     suspend fun setCupSizes(value: List<Int>) {
         context.settingsStore.edit { it[Keys.CUP_SIZES] = formatCups(value) }
     }

@@ -3,7 +3,6 @@ package app.bodyfit
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -16,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import app.bodyfit.data.Backup
 import app.bodyfit.data.HealthRepository
-import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettingsRepository
 import app.bodyfit.sensor.Permissions
 import app.bodyfit.sensor.StepTrackerService
@@ -112,7 +110,7 @@ class MainActivity : ComponentActivity() {
                     )
                     // Asked after the permission prompts, and only while the phone is
                     // still free to freeze the app. Granting it elsewhere skips the step.
-                    setupComplete == true && backgroundPromptSeen == false && !isExemptFromBatteryOptimisation() ->
+                    setupComplete == true && backgroundPromptSeen == false && !Permissions.isExemptFromBatteryOptimisation(this) ->
                         BackgroundAccessScreen(
                             onOpenSettings = {
                                 markBackgroundPromptSeen()
@@ -135,10 +133,6 @@ class MainActivity : ComponentActivity() {
         }
 
     }
-
-    /** Whether the phone has already been told to leave this app running. */
-    private fun isExemptFromBatteryOptimisation(): Boolean =
-        getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: false
 
     private fun markBackgroundPromptSeen() {
         backgroundPromptSeen = true

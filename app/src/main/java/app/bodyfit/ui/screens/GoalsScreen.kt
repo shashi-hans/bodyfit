@@ -3,7 +3,6 @@ package app.bodyfit.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -123,7 +122,7 @@ fun GoalsScreen(
                     emoji = "👣",
                     label = "Steps this week",
                     value = settings.weeklyStepGoal,
-                    range = 10_000..200_000,
+                    range = UserSettings.WEEKLY_STEP_GOAL_RANGE,
                     step = 5_000,
                     format = { "${thousands(it)} steps" },
                     onCommit = onWeeklyStepGoal,
@@ -132,7 +131,7 @@ fun GoalsScreen(
                     emoji = "🫀",
                     label = "Heart points this week",
                     value = settings.weeklyHeartPointGoal,
-                    range = 20..500,
+                    range = UserSettings.WEEKLY_HEART_POINT_GOAL_RANGE,
                     step = 5,
                     format = { "$it pts" },
                     onCommit = onWeeklyHeartPointGoal,
