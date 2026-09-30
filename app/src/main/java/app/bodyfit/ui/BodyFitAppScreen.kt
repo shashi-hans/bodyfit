@@ -72,6 +72,7 @@ import app.bodyfit.ui.screens.HowNumbersWorkScreen
 import app.bodyfit.ui.screens.LockScreenCardScreen
 import app.bodyfit.ui.screens.TodayScreen
 import app.bodyfit.ui.screens.TrendsScreen
+import app.bodyfit.ui.screens.WaterReminderScreen
 import app.bodyfit.ui.screens.WaterScreen
 import kotlinx.coroutines.launch
 
@@ -79,6 +80,7 @@ import kotlinx.coroutines.launch
 private enum class MenuPage(val route: String, val emoji: String, val label: String) {
     ABOUT_YOU("about-you", "🧍", "About you"),
     CUP_SIZE("cup-size", "🥤", "Cup sizes"),
+    WATER_REMINDER("water-reminder", "⏰", "Water reminders"),
     LOCK_SCREEN("lock-screen", "🔒", "Lock screen card"),
     HOW_NUMBERS("how-numbers", "🧮", "How the numbers work"),
     BACKUP("backup", "💾", "Backup"),
@@ -384,6 +386,19 @@ fun BodyFitAppScreen(
                     CupSizeScreen(
                         settings = settings,
                         onCupSizes = viewModel::setCupSizes,
+                        onBack = { navController.popBackStack() },
+                        contentPadding = contentPadding,
+                    )
+                }
+                composable(MenuPage.WATER_REMINDER.route) {
+                    WaterReminderScreen(
+                        settings = settings,
+                        onEnabled = viewModel::setWaterReminderEnabled,
+                        onMinutes = viewModel::setWaterReminderMinutes,
+                        onHours = viewModel::setWaterReminderHours,
+                        onSound = viewModel::setWaterReminderSound,
+                        onRing = viewModel::setWaterReminderRing,
+                        onTest = viewModel::sendTestWaterReminder,
                         onBack = { navController.popBackStack() },
                         contentPadding = contentPadding,
                     )

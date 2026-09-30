@@ -51,6 +51,27 @@ data class UserSettings(
      * both the counting and the lock-screen card together.
      */
     val trackerEnabled: Boolean = true,
+    /** Whether the drink reminder runs. Off until the user turns it on. */
+    val waterReminderEnabled: Boolean = false,
+    /** Minutes between drink reminders, one of [WATER_REMINDER_MINUTES]. */
+    val waterReminderMinutes: Int = 60,
+    /**
+     * The hours reminders may ring in, from the start of [waterReminderStartHour] up to the
+     * start of [waterReminderEndHour], where 24 is the end of the day. A start later than the
+     * end runs overnight; equal hours mean all day.
+     */
+    val waterReminderStartHour: Int = 8,
+    val waterReminderEndHour: Int = 22,
+    /**
+     * The reminder's sound: blank for the phone's default notification sound, [SOUND_SILENT]
+     * for none, otherwise a sound's content URI from the system picker.
+     *
+     * Not carried in a backup: a sound URI names a file on this phone, and on another it
+     * points at nothing or at a different sound.
+     */
+    val waterReminderSound: String = "",
+    /** Whether the reminder's sound repeats until the user responds to it. */
+    val waterReminderRingUntilStopped: Boolean = true,
     /**
      * Whether the first-run setup has been answered.
      *
@@ -86,6 +107,13 @@ data class UserSettings(
         val CUP_SIZES_ML = listOf(100, 150, 200, 250, 300, 350, 400, 500, 750, 1_000)
         val DEFAULT_CUP_SIZES_ML = listOf(200, 250, 500)
         const val CUP_COUNT = 3
+        val WATER_REMINDER_MINUTES = listOf(30, 60, 90, 120, 180)
+        const val SOUND_SILENT = "silent"
+        /** Reminder start hours: 12 am to 11 pm. */
+        val START_HOUR_RANGE = 0..23
+
+        /** Reminder end hours: 1 am up to 24, which is the end of the day, shown as 11:59 pm. */
+        val END_HOUR_RANGE = 1..24
         val CUP_RANGE = 50..1_000
 
         /**
@@ -128,6 +156,12 @@ class UserSettingsRepository(private val context: Context) {
         val LEGACY_DEFAULT_CUP = intPreferencesKey("default_cup_ml")
         val CUP_SIZES = stringPreferencesKey("cup_sizes_ml")
         val TRACKER_ENABLED = booleanPreferencesKey("tracker_enabled")
+        val WATER_REMINDER_ENABLED = booleanPreferencesKey("water_reminder_enabled")
+        val WATER_REMINDER_MINUTES = intPreferencesKey("water_reminder_minutes")
+        val WATER_REMINDER_START = intPreferencesKey("water_reminder_start_hour")
+        val WATER_REMINDER_END = intPreferencesKey("water_reminder_end_hour")
+        val WATER_REMINDER_SOUND = stringPreferencesKey("water_reminder_sound")
+        val WATER_REMINDER_RING = booleanPreferencesKey("water_reminder_ring_until_stopped")
         val AGE = intPreferencesKey("age")
         val SMOKER = booleanPreferencesKey("smoker")
         val SEX = stringPreferencesKey("sex")
@@ -153,6 +187,15 @@ class UserSettingsRepository(private val context: Context) {
                 ?: prefs[Keys.LEGACY_DEFAULT_CUP]?.let { UserSettings.normalizeCups(listOf(it, 500)) }
                 ?: defaults.cupSizesMl,
             trackerEnabled = prefs[Keys.TRACKER_ENABLED] ?: defaults.trackerEnabled,
+            waterReminderEnabled = prefs[Keys.WATER_REMINDER_ENABLED] ?: defaults.waterReminderEnabled,
+            waterReminderMinutes = prefs[Keys.WATER_REMINDER_MINUTES]?.let(::validReminderMinutes)
+                ?: defaults.waterReminderMinutes,
+            waterReminderStartHour = prefs[Keys.WATER_REMINDER_START]?.coerceIn(UserSettings.START_HOUR_RANGE)
+                ?: defaults.waterReminderStartHour,
+            waterReminderEndHour = prefs[Keys.WATER_REMINDER_END]?.coerceIn(UserSettings.END_HOUR_RANGE)
+                ?: defaults.waterReminderEndHour,
+            waterReminderSound = prefs[Keys.WATER_REMINDER_SOUND] ?: defaults.waterReminderSound,
+            waterReminderRingUntilStopped = prefs[Keys.WATER_REMINDER_RING] ?: defaults.waterReminderRingUntilStopped,
             age = prefs[Keys.AGE] ?: defaults.age,
             smoker = prefs[Keys.SMOKER] ?: defaults.smoker,
             sex = prefs[Keys.SEX]?.let { runCatching { Sex.valueOf(it) }.getOrNull() } ?: defaults.sex,
@@ -201,6 +244,11 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.SMOKER] = value.smoker
             prefs[Keys.SEX] = value.sex.name
             prefs[Keys.NAME] = cleanName(value.name)
+            prefs[Keys.WATER_REMINDER_ENABLED] = value.waterReminderEnabled
+            prefs[Keys.WATER_REMINDER_MINUTES] = validReminderMinutes(value.waterReminderMinutes)
+            prefs[Keys.WATER_REMINDER_START] = value.waterReminderStartHour.coerceIn(UserSettings.START_HOUR_RANGE)
+            prefs[Keys.WATER_REMINDER_END] = value.waterReminderEndHour.coerceIn(UserSettings.END_HOUR_RANGE)
+            prefs[Keys.WATER_REMINDER_RING] = value.waterReminderRingUntilStopped
         }
     }
 
@@ -288,6 +336,41 @@ class UserSettingsRepository(private val context: Context) {
     suspend fun setSmoker(value: Boolean) {
         context.settingsStore.edit { it[Keys.SMOKER] = value }
     }
+
+    suspend fun setWaterReminderEnabled(value: Boolean) {
+        context.settingsStore.edit { it[Keys.WATER_REMINDER_ENABLED] = value }
+    }
+
+    suspend fun setWaterReminderMinutes(value: Int) {
+        context.settingsStore.edit { it[Keys.WATER_REMINDER_MINUTES] = validReminderMinutes(value) }
+    }
+
+    suspend fun setWaterReminderRing(value: Boolean) {
+        context.settingsStore.edit { it[Keys.WATER_REMINDER_RING] = value }
+    }
+
+    suspend fun setWaterReminderSound(value: String) {
+        context.settingsStore.edit { it[Keys.WATER_REMINDER_SOUND] = value }
+    }
+
+    /**
+     * Saves the reminder hours. Equal hours would read as all day, which is not what someone
+     * dragging one slider onto the other means; 12 am to 11:59 pm already says all day, so an
+     * equal pair keeps a one-hour window instead.
+     */
+    suspend fun setWaterReminderHours(startHour: Int, endHour: Int) {
+        val start = startHour.coerceIn(UserSettings.START_HOUR_RANGE)
+        var end = endHour.coerceIn(UserSettings.END_HOUR_RANGE)
+        if (end == start) end = (start + 1).coerceAtMost(UserSettings.END_HOUR_RANGE.last)
+        context.settingsStore.edit {
+            it[Keys.WATER_REMINDER_START] = start
+            it[Keys.WATER_REMINDER_END] = end
+        }
+    }
+
+    /** One of the offered intervals, the nearest when [value] is not one of them. */
+    private fun validReminderMinutes(value: Int): Int =
+        UserSettings.WATER_REMINDER_MINUTES.minBy { kotlin.math.abs(it - value) }
 
     suspend fun setTrackerEnabled(value: Boolean) {
         context.settingsStore.edit { it[Keys.TRACKER_ENABLED] = value }

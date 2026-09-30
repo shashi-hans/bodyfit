@@ -3,14 +3,16 @@ package app.bodyfit.notification
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationManagerCompat
 import app.bodyfit.data.HealthRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Handles the water buttons on the lock-screen card. The tracker service is
- * watching today's row, so it redraws the card as soon as the write lands.
+ * Handles the water buttons on the lock-screen card and on the water reminder. The tracker
+ * service is watching today's row, so it redraws the card as soon as the write lands, and
+ * the reminder is dismissed because it has been answered.
  */
 class WaterActionReceiver : BroadcastReceiver() {
 
@@ -19,6 +21,7 @@ class WaterActionReceiver : BroadcastReceiver() {
         val amountMl = intent.getIntExtra(EXTRA_AMOUNT_ML, 0)
         if (amountMl <= 0) return
 
+        NotificationManagerCompat.from(context).cancel(WaterReminder.NOTIFICATION_ID)
         val pending = goAsync()
         val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {

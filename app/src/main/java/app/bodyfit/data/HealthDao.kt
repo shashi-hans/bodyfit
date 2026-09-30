@@ -55,6 +55,10 @@ interface HealthDao {
     @Query("SELECT COALESCE(SUM(amountMl), 0) FROM water_entry WHERE date = :date")
     suspend fun waterTotal(date: String): Int
 
+    /** When the most recent drink on any day was logged, or null when none ever was. */
+    @Query("SELECT MAX(loggedAt) FROM water_entry")
+    suspend fun lastWaterLoggedAt(): Long?
+
     /** Every drink ever logged. Only the backup writer needs this. */
     @Query("SELECT * FROM water_entry ORDER BY loggedAt")
     suspend fun allWaterEntries(): List<WaterEntry>

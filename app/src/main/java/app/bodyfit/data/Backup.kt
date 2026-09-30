@@ -60,6 +60,11 @@ object Backup {
                 put("weeklyStepGoal", settings.weeklyStepGoal)
                 put("weeklyHeartPointGoal", settings.weeklyHeartPointGoal)
                 put("cupSizesMl", JSONArray(settings.cupSizesMl))
+                put("waterReminderEnabled", settings.waterReminderEnabled)
+                put("waterReminderMinutes", settings.waterReminderMinutes)
+                put("waterReminderStartHour", settings.waterReminderStartHour)
+                put("waterReminderEndHour", settings.waterReminderEndHour)
+                put("waterReminderRingUntilStopped", settings.waterReminderRingUntilStopped)
             },
         )
 
@@ -207,6 +212,14 @@ object Backup {
                     current.weeklyHeartPointGoal,
                 ),
                 cupSizesMl = cupSizes(settingsJson) ?: current.cupSizesMl,
+                waterReminderEnabled = settingsJson.optBoolean("waterReminderEnabled", current.waterReminderEnabled),
+                waterReminderMinutes = settingsJson.optInt("waterReminderMinutes", current.waterReminderMinutes),
+                waterReminderStartHour = settingsJson.optInt("waterReminderStartHour", current.waterReminderStartHour),
+                waterReminderEndHour = settingsJson.optInt("waterReminderEndHour", current.waterReminderEndHour),
+                waterReminderRingUntilStopped = settingsJson.optBoolean(
+                    "waterReminderRingUntilStopped",
+                    current.waterReminderRingUntilStopped,
+                ),
             )
         }
 

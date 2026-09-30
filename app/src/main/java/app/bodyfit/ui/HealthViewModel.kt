@@ -14,6 +14,7 @@ import app.bodyfit.data.HealthRepository
 import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
+import app.bodyfit.notification.WaterReminder
 import app.bodyfit.data.WaterEntry
 import app.bodyfit.sensor.StepTrackerService
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -204,6 +205,34 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Writes a chosen backup file back in. Returns the number of days restored. */
     suspend fun restoreJson(json: String): Int = repository.restoreJson(json)
+
+    /** Starts or stops the drink reminder schedule along with the setting. */
+    fun setWaterReminderEnabled(enabled: Boolean) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderEnabled(enabled)
+        WaterReminder.apply(getApplication(), repository.currentSettings())
+    }
+
+    fun setWaterReminderMinutes(minutes: Int) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderMinutes(minutes)
+        WaterReminder.apply(getApplication(), repository.currentSettings())
+    }
+
+    fun setWaterReminderRing(value: Boolean) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderRing(value)
+    }
+
+    fun setWaterReminderSound(value: String) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderSound(value)
+    }
+
+    /** Posts a reminder now, whatever the hours and the day's total, to hear the sound. */
+    fun sendTestWaterReminder() = viewModelScope.launch {
+        WaterReminder.post(getApplication(), repository.currentSettings(), repository.drinkState().drankTodayMl)
+    }
+
+    fun setWaterReminderHours(startHour: Int, endHour: Int) = viewModelScope.launch {
+        repository.userSettings.setWaterReminderHours(startHour, endHour)
+    }
 
     /** Turning the tracker off stops the service, which also removes the lock-screen card. */
     fun setTrackerEnabled(enabled: Boolean) = viewModelScope.launch {

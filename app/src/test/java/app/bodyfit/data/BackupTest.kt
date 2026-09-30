@@ -144,4 +144,22 @@ class BackupTest {
         assertEquals(listOf(200, 300, 350), UserSettings.normalizeCups(listOf(330, 290)))
         assertEquals(listOf(200, 250, 500), UserSettings.normalizeCups(emptyList()))
     }
+
+    @Test
+    fun `the water reminder settings survive the round trip`() {
+        val settings = UserSettings(
+            waterReminderEnabled = true,
+            waterReminderMinutes = 90,
+            waterReminderStartHour = 7,
+            waterReminderEndHour = 23,
+            waterReminderRingUntilStopped = false,
+        )
+        val json = Backup.toJson(emptyList(), emptyList(), emptyList(), emptyList(), settings)
+        val restored = Backup.fromJson(json, UserSettings()).settings
+        assertEquals(true, restored.waterReminderEnabled)
+        assertEquals(90, restored.waterReminderMinutes)
+        assertEquals(7, restored.waterReminderStartHour)
+        assertEquals(23, restored.waterReminderEndHour)
+        assertEquals(false, restored.waterReminderRingUntilStopped)
+    }
 }

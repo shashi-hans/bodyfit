@@ -10,6 +10,7 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 /**
@@ -66,9 +67,19 @@ object Permissions {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
             granted(context, Manifest.permission.ACTIVITY_RECOGNITION)
 
-    fun hasNotifications(context: Context): Boolean =
+    /** The runtime permission alone, which Android 13 and later ask for. */
+    fun hasNotificationPermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             granted(context, Manifest.permission.POST_NOTIFICATIONS)
+
+    /**
+     * Whether a notification from this app can actually be seen: the permission, and the
+     * app's notifications not switched off in the phone's settings, which on Android 12 and
+     * older is the only control there is.
+     */
+    fun hasNotifications(context: Context): Boolean =
+        hasNotificationPermission(context) &&
+            NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     /** The permissions still worth asking for on this device, empty when nothing is missing. */
     fun missing(context: Context): List<String> = buildList {

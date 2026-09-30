@@ -62,7 +62,7 @@ import app.bodyfit.ui.components.WellnessNote
 
 /** Shared frame: a back header, then whatever the page puts in the list. */
 @Composable
-private fun MenuPage(
+internal fun MenuPage(
     title: String,
     onBack: () -> Unit,
     contentPadding: PaddingValues,

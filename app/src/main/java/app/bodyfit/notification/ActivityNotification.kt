@@ -136,7 +136,8 @@ object ActivityNotification {
         )
     }
 
-    private fun waterAction(context: Context, amountMl: Int): NotificationCompat.Action {
+    /** A button that logs [amountMl] of water. Shared with the water reminder. */
+    fun waterAction(context: Context, amountMl: Int): NotificationCompat.Action {
         val intent = Intent(context, WaterActionReceiver::class.java).apply {
             action = WaterActionReceiver.ACTION_ADD_WATER
             putExtra(WaterActionReceiver.EXTRA_AMOUNT_ML, amountMl)

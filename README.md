@@ -53,6 +53,30 @@ back arrow, so no subject has two homes. Cup sizes holds three picks (200, 250 a
 default); they are the water buttons on Today and on the lock screen card, which Android caps
 at three actions.
 
+Water reminders are off until switched on, and repeat every 30 minutes to 3 hours. A
+WorkManager job checks at that interval and posts a reminder with the three cup sizes as
+buttons, but only inside the hours the user sets (08:00 to 22:00 by default, any hour from
+12:00 am up to 11:59 pm; a start later than the end runs overnight, equal hours mean all day), only while the day's goal is not met,
+and only when no drink was logged within the interval. Swiping a reminder away schedules it
+to ring again in 15 minutes, and that check skips it when a drink was logged since the
+dismissal. The swipe is heard through the notification's delete intent, which Android fires
+only for a user dismissal, so a cup tap or the app cancelling it never snoozes.
+
+The reminder's sound is picked through Android's own sound picker (notification sounds,
+ringtones and alarms, plus Default and Silent), and a test button posts a reminder at once so
+the choice can be heard. Android fixes a channel's sound when the channel is created, so each
+sound gets its own channel id and the previous one is deleted; only one "Water reminders"
+channel ever shows in the phone's settings. The sound URI is not carried in a backup, because
+it names a file on this phone. By default the reminder keeps ringing until the user responds: the notification
+carries `FLAG_INSISTENT`, so Android repeats the sound until a cup is tapped, the reminder is
+swiped away or the shade is opened, and its channel is high importance so it drops down over
+the screen with the cup buttons while it rings. A switch returns it to a single sound. Do Not
+Disturb still silences it; ringing through that would need a full-screen alarm, which Play
+limits to alarm and calling apps. WorkManager rather than exact alarms: a
+reminder a few minutes late costs nothing, and exact alarms need a permission Play reviews.
+The notification permission is asked when the switch is turned on. Tapping a cup logs the
+drink and dismisses the reminder.
+
 ## Exercise
 
 Box breathing, running, cycling and skipping, reached from a button on Today. Breathing is

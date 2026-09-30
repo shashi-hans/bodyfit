@@ -1,6 +1,7 @@
 package app.bodyfit.data
 
 import android.content.Context
+import app.bodyfit.notification.WaterReminder
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
@@ -13,6 +14,8 @@ import java.time.LocalDate
  * day-rollover and water-total rules.
  */
 class HealthRepository(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private val dao = HealthDatabase.get(context).healthDao()
     private val trackerState = TrackerStateRepository(context.applicationContext)
@@ -38,6 +41,13 @@ class HealthRepository(context: Context) {
 
     fun observeWaterEntries(date: String = Dates.today()): Flow<List<WaterEntry>> =
         dao.observeWaterEntries(date)
+
+    /**
+     * Today's water and the time of the last drink on any day. The last drink is not limited
+     * to today, so a glass at 23:50 still counts for a reminder due at 00:05.
+     */
+    suspend fun drinkState(): DrinkState =
+        DrinkState(drankTodayMl = dao.waterTotal(Dates.today()), lastDrinkAt = dao.lastWaterLoggedAt())
 
     /** Every recorded day. Streaks and the health score read the whole history. */
     fun observeAllDays(): Flow<List<DailyRecord>> = dao.observeAllDays()
@@ -84,6 +94,8 @@ class HealthRepository(context: Context) {
             dao.restore(snapshot.days, snapshot.hours, snapshot.water, snapshot.sessions)
             userSettings.replace(snapshot.settings)
         }
+        // A restored file can turn the drink reminder on or change its interval.
+        WaterReminder.apply(appContext, userSettings.current())
         return snapshot.days.size
     }
 
@@ -175,3 +187,6 @@ class HealthRepository(context: Context) {
         const val MIN_SESSION_SECONDS = 20
     }
 }
+
+/** What the water reminder needs to know to decide whether to ring. */
+data class DrinkState(val drankTodayMl: Int, val lastDrinkAt: Long?)
