@@ -96,8 +96,6 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         .flatMapLatest { date -> date?.let { repository.observeSessions(it) } ?: flowOf(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun startExercise() = viewModelScope.launch { repository.startSession() }
-
     fun stopExercise(
         type: ExerciseType,
         startedAt: Long,

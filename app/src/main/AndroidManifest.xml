@@ -13,7 +13,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <!-- Install-time, no prompt. Lets the exercise session keep reading GPS with the screen
+         off, and only while a session's notification is showing. The runtime location
+         permission is still asked only when a running or cycling session starts. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Held only while an exercise session runs, so its clock and jump count continue with
+         the screen off. Install-time, no prompt. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Declared but not required, so the listing stays downloadable on every device. The
          app checks for the sensor at launch instead, and says plainly why it cannot run
@@ -53,6 +60,11 @@
             android:name=".sensor.StepTrackerService"
             android:exported="false"
             android:foregroundServiceType="health" />
+
+        <service
+            android:name=".sensor.ExerciseSessionService"
+            android:exported="false"
+            android:foregroundServiceType="location|health|shortService" />
 
         <receiver
             android:name=".notification.WaterActionReceiver"

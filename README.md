@@ -106,6 +106,13 @@ treated as two bad fixes rather than a sprint. Location is requested when a runn
 cycling session starts rather than at launch, so the reason is on screen when the prompt
 appears, and a refusal starts the session anyway on the assumed effort.
 
+The session is timed by `ExerciseSessionService`, a foreground service of type
+`location|health`, not by the screen. A screen-owned timer lost while-in-use location the
+moment the phone locked in a pocket, and the run came out short. The service holds the
+clock, the jump counter and GPS for exactly as long as its "in progress" notification shows,
+so the session also survives a rotation. A partial wake lock, bounded at six hours, keeps the clock and the accelerometer running with the screen off; the moving time is added up on the monotonic clock. The service also owns the session flag that pauses the step tracker's scoring: it sets the flag once it is running and clears it when it ends, and the step tracker clears any flag it finds with no live session behind it. `FOREGROUND_SERVICE_LOCATION` is an install-time
+permission with no prompt; `ACCESS_BACKGROUND_LOCATION` is not requested.
+
 Every session is paused automatically whenever the phone stops moving for three seconds,
 and only time spent moving is billed. Waiting at a crossing is not exercise. Three seconds
 rather than one because the top of a jump is briefly weightless and would otherwise read

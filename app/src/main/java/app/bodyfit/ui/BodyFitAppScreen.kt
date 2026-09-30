@@ -421,7 +421,6 @@ fun BodyFitAppScreen(
                 composable(Tab.EXERCISE.route) {
                     ExerciseScreen(
                         sessions = sessions,
-                        onStart = { viewModel.startExercise() },
                         onStop = { type, startedAt, seconds, met, metres ->
                             viewModel.stopExercise(type, startedAt, seconds, met, metres)
                         },

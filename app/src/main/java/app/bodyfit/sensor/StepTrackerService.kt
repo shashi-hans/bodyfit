@@ -133,6 +133,10 @@ class StepTrackerService : LifecycleService(), SensorEventListener {
             repository.settings.collect { settings = it }
         }
         lifecycleScope.launch {
+            // Both services share this process, so a session flag with no live session behind
+            // it was left by a process that died mid-session, and would stop walking being
+            // scored until something cleared it.
+            if (ExerciseSessionService.state.value == null) trackerState.setSessionStartedAt(0L)
             trackerState.sessionActive.collect { sessionActive = it }
         }
         restartNotificationUpdates()

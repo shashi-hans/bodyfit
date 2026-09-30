@@ -34,7 +34,12 @@ Android prevents other apps from reading them.
 
 If you start a running or cycling session and allow it, the app reads your location while
 that session is open, to work out how fast you are going. It is used to pick an effort
-level and is then discarded.
+level and is then discarded. The app asks for location only at that moment, never at
+install or launch.
+
+While a session runs, a notification shows that it is in progress, and the app keeps reading
+location with the screen off until you stop the session. When no session is running, the app
+does not read location at all, in the foreground or the background.
 
 **No coordinate is saved.** The session records how long you exercised, how far you went
 and the calories estimated from that. It does not record where you were, and the app holds
@@ -78,7 +83,8 @@ no account to close.
 | --- | --- |
 | Physical activity (`ACTIVITY_RECOGNITION`) | Android requires it to read the step counter. Without it no steps can be counted. |
 | Notifications (`POST_NOTIFICATIONS`) | To show the lock-screen card with your daily totals. |
-| Foreground service (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH`) | To keep counting steps while the app is closed. Android requires a visible notification for this. |
+| Foreground service (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH`, `FOREGROUND_SERVICE_LOCATION`) | To keep counting steps while the app is closed, and to keep timing an exercise session you started with the screen off. Android requires a visible notification for each. |
+| Wake lock (`WAKE_LOCK`) | Held only while an exercise session runs, so its clock keeps going with the screen off. |
 | Run at startup (`RECEIVE_BOOT_COMPLETED`) | To resume counting after you restart your phone. |
 | Location (`ACCESS_FINE_LOCATION`) | To measure speed during a running or cycling session you started. Optional, used only while that session is open, and no coordinate is stored. |
 

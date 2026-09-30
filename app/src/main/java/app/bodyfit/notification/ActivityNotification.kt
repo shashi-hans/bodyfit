@@ -124,7 +124,8 @@ object ActivityNotification {
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(openApp(context))
 
-    private fun openApp(context: Context): PendingIntent {
+    /** Opens the app from a notification. Shared with the exercise session card. */
+    fun openApp(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         return PendingIntent.getActivity(

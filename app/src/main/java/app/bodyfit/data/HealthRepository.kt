@@ -124,11 +124,6 @@ class HealthRepository(context: Context) {
     fun observeSessions(date: String = Dates.today()): Flow<List<ExerciseSession>> =
         dao.observeSessions(date)
 
-    /** Marks an exercise as running, which stops the tracker scoring the same minutes twice. */
-    suspend fun startSession(at: Long = System.currentTimeMillis()) {
-        trackerState.setSessionStartedAt(at)
-    }
-
     /**
      * Records a finished exercise and folds it into the day.
      *

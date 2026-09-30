@@ -6,7 +6,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -50,5 +54,17 @@ class TrackerStateRepository(private val context: Context) {
 
     suspend fun setLastRawCount(value: Long) {
         context.trackerStore.edit { it[Keys.LAST_RAW_COUNT] = value }
+    }
+
+    companion object {
+        /**
+         * Clears the session flag from a place that cannot wait for it, such as a service's
+         * onDestroy. The write outlives the caller; DataStore makes it atomic.
+         */
+        fun clearSessionDetached(context: Context) {
+            CoroutineScope(Dispatchers.IO + NonCancellable).launch {
+                TrackerStateRepository(context.applicationContext).setSessionStartedAt(0L)
+            }
+        }
     }
 }

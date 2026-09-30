@@ -24,22 +24,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import android.Manifest
-import android.annotation.SuppressLint
-import android.location.LocationListener
-import android.location.LocationManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
+import android.widget.Toast
 import androidx.compose.material3.AlertDialog
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,18 +41,14 @@ import androidx.compose.ui.unit.dp
 import app.bodyfit.data.ExerciseSession
 import app.bodyfit.data.ExerciseType
 import app.bodyfit.data.HealthRepository
+import app.bodyfit.sensor.ExerciseSessionService
+import app.bodyfit.sensor.LiveSession
 import app.bodyfit.sensor.Permissions
-import app.bodyfit.sensor.SessionMonitor
-import app.bodyfit.sensor.SpeedMonitor
-import app.bodyfit.sensor.cyclingMet
-import app.bodyfit.sensor.runningMet
-import app.bodyfit.sensor.skippingMet
 import app.bodyfit.ui.components.BreathingDialog
 import app.bodyfit.ui.components.SectionHeader
 import app.bodyfit.ui.components.SettingsCard
 import app.bodyfit.ui.components.Wellness
 import app.bodyfit.ui.components.WellnessNote
-import kotlinx.coroutines.delay
 import java.util.Locale
 
 /**
@@ -74,7 +61,6 @@ import java.util.Locale
 @Composable
 fun ExerciseScreen(
     sessions: List<ExerciseSession>,
-    onStart: (ExerciseType) -> Unit,
     onStop: (ExerciseType, Long, Int, Double?, Double) -> Unit,
     onDelete: (ExerciseSession) -> Unit,
     contentPadding: PaddingValues,
@@ -82,8 +68,39 @@ fun ExerciseScreen(
 ) {
     val context = LocalContext.current
     var breathing by remember { mutableStateOf(false) }
-    var running by remember { mutableStateOf<ExerciseType?>(null) }
-    var pendingLocation by remember { mutableStateOf<ExerciseType?>(null) }
+    // The service owns the running session, so it outlives a rotation, a theme change and
+    // the screen going off; this only reflects it.
+    val live by ExerciseSessionService.state.collectAsState()
+    var pendingLocation by rememberSaveable { mutableStateOf<ExerciseType?>(null) }
+
+    // Asked here when missing: from Android 14 a session cannot go foreground without it
+    // (or, for running and cycling, without location).
+    var pendingActivity by rememberSaveable { mutableStateOf<ExerciseType?>(null) }
+    val activityLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        pendingActivity?.let { type ->
+            if (ExerciseSessionService.canStart(context, type)) {
+                ExerciseSessionService.start(context, type)
+            } else {
+                Toast.makeText(
+                    context,
+                    "Body Fit needs physical activity access to time a session.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            pendingActivity = null
+        }
+    }
+
+    fun begin(type: ExerciseType) {
+        if (ExerciseSessionService.canStart(context, type)) {
+            ExerciseSessionService.start(context, type)
+        } else {
+            pendingActivity = type
+            activityLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        }
+    }
 
     // Asked at the moment it is used rather than at launch, so the reason is on screen when
     // the prompt appears. A refusal starts the session anyway, on an assumed effort: the
@@ -92,8 +109,7 @@ fun ExerciseScreen(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
         pendingLocation?.let { type ->
-            running = type
-            onStart(type)
+            begin(type)
             pendingLocation = null
         }
     }
@@ -134,8 +150,7 @@ fun ExerciseScreen(
                                     )
                                 )
                             } else {
-                                running = type
-                                onStart(type)
+                                begin(type)
                             }
                         },
                     )
@@ -179,12 +194,18 @@ fun ExerciseScreen(
         BreathingDialog(onDismiss = { breathing = false })
     }
 
-    running?.let { type ->
+    live?.let { session ->
         TimerDialog(
-            type = type,
-            onDone = { startedAt, seconds, measuredMet, metres ->
-                onStop(type, startedAt, seconds, measuredMet, metres)
-                running = null
+            session = session,
+            onStop = {
+                val final = ExerciseSessionService.stop(context) ?: session
+                onStop(final.type, final.startedAt, final.seconds, final.measuredMet, final.metres)
+            },
+            // Zero seconds is under the minimum, so the stop clears the session flag and
+            // logs nothing.
+            onDiscard = {
+                ExerciseSessionService.stop(context)
+                onStop(session.type, session.startedAt, 0, null, 0.0)
             },
         )
     }
@@ -287,117 +308,16 @@ private fun distanceLine(metres: Double, seconds: Int): String {
 }
 
 /**
- * The running clock for one exercise, paused whenever the phone stops moving.
+ * The running clock for one exercise, drawn from [ExerciseSessionService].
  *
- * Elapsed time is accumulated from wall-clock deltas while movement is happening, rather
- * than counted from the start, so a session is billed for the time spent exercising and a
- * dropped tick loses nothing. Standing at a crossing does not earn calories.
- *
- * For skipping the same signal counts jumps, and the rate replaces the assumed effort with
- * a measured one.
+ * The service does the measuring, so the session keeps its clock, jump count and GPS
+ * distance with the screen off or the activity recreated. This dialog only shows the
+ * readings and ends the session.
  */
-// The location call below is guarded by Permissions.hasLocation and wrapped in runCatching,
-// but lint only recognises a checkSelfPermission written inline at the call site. Inlining
-// it would put a second copy of that rule outside Permissions, where every other check in
-// the app lives, so the check stays where it belongs and lint is told here.
-@SuppressLint("MissingPermission")
 @Composable
-private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?, Double) -> Unit) {
-    val context = LocalContext.current
-    val startedAt = remember { System.currentTimeMillis() }
-    val monitor = remember(type) { SessionMonitor(countJumps = type == ExerciseType.SKIPPING) }
-
-    var activeMs by remember { mutableLongStateOf(0L) }
-    var moving by remember { mutableStateOf(true) }
-    var jumps by remember { mutableIntStateOf(0) }
-    var kmh by remember { mutableDoubleStateOf(0.0) }
-    var metres by remember { mutableDoubleStateOf(0.0) }
-
-    // Speed is only worth measuring where distance is the effort. Skipping goes nowhere,
-    // and asking for location during it would be a permission with no purpose.
+private fun TimerDialog(session: LiveSession, onStop: () -> Unit, onDiscard: () -> Unit) {
+    val type = session.type
     val wantsSpeed = type == ExerciseType.RUNNING || type == ExerciseType.CYCLING
-    val canMeasure = remember(type) { wantsSpeed && Permissions.canMeasureSpeed(context) }
-    val speed = remember(type) { SpeedMonitor() }
-
-    // Registered for the life of the dialog only. A session is bounded, so streaming the
-    // accelerometer for it is a fair trade in a way an always-on listener would not be.
-    DisposableEffect(type) {
-        val sensors = context.getSystemService(SensorManager::class.java)
-        val accelerometer = sensors?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent) {
-                if (event.values.size < 3) return
-                monitor.onSample(
-                    System.currentTimeMillis(),
-                    event.values[0],
-                    event.values[1],
-                    event.values[2],
-                )
-            }
-
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-        }
-        if (accelerometer != null) {
-            sensors.registerListener(listener, accelerometer, SAMPLE_US, BATCH_US)
-        }
-        onDispose { sensors?.unregisterListener(listener) }
-    }
-
-    // Registered for the life of the dialog only, and the fixes are consumed for distance
-    // and dropped. No coordinate reaches the database or leaves this composable.
-    DisposableEffect(canMeasure) {
-        if (!canMeasure) return@DisposableEffect onDispose { }
-        val manager = context.getSystemService(LocationManager::class.java)
-        val listener = LocationListener { location ->
-            speed.onFix(
-                timestampMs = System.currentTimeMillis(),
-                latitude = location.latitude,
-                longitude = location.longitude,
-                accuracyMetres = if (location.hasAccuracy()) location.accuracy else Float.MAX_VALUE,
-            )
-        }
-        // Checked again here, not only in `canMeasure` above: that was read when the dialog
-        // opened, and the permission can be taken away between then and now from the
-        // notification shade. The call throws if it is, so the check is not decoration.
-        runCatching {
-            if (Permissions.hasLocation(context)) {
-                manager?.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    FIX_INTERVAL_MS,
-                    FIX_DISTANCE_M,
-                    listener,
-                )
-            }
-        }
-        onDispose { runCatching { manager?.removeUpdates(listener) } }
-    }
-
-    LaunchedEffect(startedAt) {
-        var last = System.currentTimeMillis()
-        while (true) {
-            delay(TICK_MS)
-            val now = System.currentTimeMillis()
-            // Only time spent moving is added, which is what makes the pause a pause
-            // rather than a label over a clock that keeps running.
-            if (monitor.moving) activeMs += now - last
-            last = now
-            moving = monitor.moving
-            jumps = monitor.jumps
-            kmh = speed.averageKmh
-            metres = speed.metres
-        }
-    }
-
-    val seconds = (activeMs / 1000L).toInt()
-    val minutes = seconds / 60.0
-    val rate = if (minutes > 0) jumps / minutes else 0.0
-    val measuredMet = when {
-        type == ExerciseType.SKIPPING && jumps > 0 -> skippingMet(rate)
-        // A handful of metres is a phone settling on a fix, not a session worth costing.
-        canMeasure && metres >= MIN_MEASURED_METRES && type == ExerciseType.RUNNING -> runningMet(kmh)
-        canMeasure && metres >= MIN_MEASURED_METRES && type == ExerciseType.CYCLING -> cyclingMet(kmh)
-        else -> null
-    }
 
     AlertDialog(
         onDismissRequest = { },
@@ -406,12 +326,12 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?, Double)
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = clock(seconds),
+                    text = clock(session.seconds),
                     style = MaterialTheme.typography.displayMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = if (moving) "Counting" else "Paused, no movement",
+                    text = if (session.moving) "Counting" else "Paused, no movement",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -419,21 +339,21 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?, Double)
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = when {
-                            !canMeasure -> "Effort assumed"
-                            metres < MIN_MEASURED_METRES -> "Waiting for a GPS fix"
+                            !session.measuringSpeed -> "Effort assumed"
+                            !session.hasSpeed -> "Waiting for a GPS fix"
                             else -> String.format(
                                 Locale.getDefault(),
                                 "%.2f km at %.1f km/h",
-                                metres / 1000.0,
-                                kmh,
+                                session.metres / 1000.0,
+                                session.kmh,
                             )
                         },
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = if (canMeasure) {
-                            "Speed measured by GPS. No location is stored."
+                        text = if (session.measuringSpeed) {
+                            "Speed measured by GPS, also with the screen off. No location is stored."
                         } else {
                             "No GPS access, so the effort in the description is used."
                         },
@@ -445,13 +365,13 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?, Double)
                 if (type == ExerciseType.SKIPPING) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "$jumps jumps",
+                        text = "${session.jumps} jumps",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = if (jumps > 0) {
-                            "${rate.toInt()} a minute, measured"
+                        text = if (session.jumps > 0) {
+                            "${session.jumpRate.toInt()} a minute, measured"
                         } else {
                             "Counting jumps from the accelerometer"
                         },
@@ -466,7 +386,7 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?, Double)
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
-                if (seconds < HealthRepository.MIN_SESSION_SECONDS) {
+                if (session.seconds < HealthRepository.MIN_SESSION_SECONDS) {
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = "Under ${HealthRepository.MIN_SESSION_SECONDS} seconds of " +
@@ -478,31 +398,10 @@ private fun TimerDialog(type: ExerciseType, onDone: (Long, Int, Double?, Double)
                 }
             }
         },
-        confirmButton = {
-            Button(onClick = { onDone(startedAt, seconds, measuredMet, metres) }) { Text("Stop and save") }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = { onDone(startedAt, 0, null, 0.0) }) { Text("Discard") }
-        },
+        confirmButton = { Button(onClick = onStop) { Text("Stop and save") } },
+        dismissButton = { OutlinedButton(onClick = onDiscard) { Text("Discard") } },
     )
 }
-
-/** 25 Hz, enough to resolve a jump without streaming needless samples. */
-private const val SAMPLE_US = 40_000
-
-/** A quarter second of buffering, which the clock ticks at anyway. */
-private const val BATCH_US = 250_000
-
-private const val TICK_MS = 250L
-
-/** A fix every two seconds is plenty for an average, and far cheaper than the maximum rate. */
-private const val FIX_INTERVAL_MS = 2_000L
-
-/** No minimum displacement: the filtering that matters is on accuracy, not distance. */
-private const val FIX_DISTANCE_M = 0f
-
-/** Below this the phone is still finding itself, not covering ground. */
-private const val MIN_MEASURED_METRES = 50.0
 
 /** Seconds as m:ss, or h:mm:ss once an exercise runs past the hour. Shared with Today. */
 internal fun clock(seconds: Int): String {
