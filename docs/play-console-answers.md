@@ -30,10 +30,12 @@ Supporting facts, each checkable in the repo:
 - Location is read only while a running or cycling session is open, and the fixes are
   consumed for distance and dropped (`sensor/SpeedMonitor.kt`). The session row holds
   duration, distance and calories, never coordinates (`data/ExerciseSession.kt`).
-- No HTTP client, no analytics SDK, no crash reporter. Dependencies are Compose, Room,
-  DataStore and Lifecycle only (`app/build.gradle.kts`).
-- `android:allowBackup="false"`, so Android's own backup does not copy health data to the
-  user's Google account either.
+- No HTTP client, no analytics SDK, no crash reporter. Dependencies are Compose, Navigation,
+  Room, DataStore, WorkManager and Lifecycle only (`app/build.gradle.kts`).
+- `android:allowBackup="false"` plus `res/xml/data_extraction_rules.xml`, which excludes
+  everything from cloud backup and device-to-device transfer. Android 12 and later ignore
+  `allowBackup` for transfer, so the rules file is what keeps health data off a new phone
+  unless the user moves a backup file.
 - Export and restore write and read a file the user picks through the system picker. The
   app never sees a path it was not handed.
 

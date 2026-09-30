@@ -51,8 +51,9 @@ Nothing, including your location.
 The app declares no internet permission, so it is technically incapable of sending your
 data anywhere. It contains no network code, no analytics library and no crash reporting.
 
-Android's own automatic backup is switched off (`allowBackup="false"`), so your health data
-is not copied to your Google account either.
+Android's own automatic backup and phone-to-phone transfer are both switched off, so your
+health data is not copied to your Google account or to a new phone unless you move a backup
+file yourself.
 
 ## Sharing
 
