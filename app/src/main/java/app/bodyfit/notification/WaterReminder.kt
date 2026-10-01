@@ -11,6 +11,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -48,6 +49,7 @@ object WaterReminder {
     private const val WORK_NAME = "water-reminder"
     private const val SNOOZE_WORK_NAME = "water-reminder-snooze"
     private const val DISMISS_REQUEST = 1003
+    private const val ALARM_REQUEST = 1004
 
     /** How long a dismissed reminder waits before ringing again, if no drink was logged. */
     const val SNOOZE_MINUTES = 15L
@@ -233,13 +235,25 @@ object WaterReminder {
             .setColor(ContextCompat.getColor(context, R.color.notification_accent))
             .setContentTitle("💧 Time for some water")
             .setContentText("${Volume.format(drankTodayMl)} of ${Volume.format(settings.waterGoalMl)} today")
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setCategory(
+                if (settings.waterReminderRingUntilStopped) NotificationCompat.CATEGORY_ALARM
+                else NotificationCompat.CATEGORY_REMINDER,
+            )
             .setAutoCancel(true)
-            .setContentIntent(ActivityNotification.openApp(context))
+            .setContentIntent(
+                if (settings.waterReminderRingUntilStopped) alarmIntent(context)
+                else ActivityNotification.openApp(context),
+            )
             // Fired when the user swipes the reminder away or clears all notifications, and not
             // when a cup button or the app cancels it, so only a dismissal starts the snooze.
             .setDeleteIntent(dismissIntent(context))
         settings.cupSizesMl.forEach { builder.addAction(ActivityNotification.waterAction(context, it)) }
+        if (settings.waterReminderRingUntilStopped) {
+            // Opens the reminder full screen over the lock screen, like an alarm. While the
+            // phone is in use Android shows it as a pop-up that stays until answered instead,
+            // so a ringing phone always shows what is ringing.
+            builder.setFullScreenIntent(alarmIntent(context), true)
+        }
         val notification = builder.build()
         if (settings.waterReminderRingUntilStopped) {
             // Android repeats the sound until the notification is answered, swiped away or
@@ -248,6 +262,23 @@ object WaterReminder {
         }
         runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
     }
+
+    /**
+     * Whether Android lets this app open the reminder full screen. Android 14 and later leave
+     * that to the user for apps that are not alarm clocks or phone apps.
+     */
+    fun canShowFullScreen(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+            context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() == true
+
+    private fun alarmIntent(context: Context): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            ALARM_REQUEST,
+            Intent(context, WaterReminderAlarmActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun dismissIntent(context: Context): PendingIntent =
         PendingIntent.getBroadcast(

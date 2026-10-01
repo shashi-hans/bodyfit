@@ -37,6 +37,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import app.bodyfit.data.UserSettings
 import app.bodyfit.notification.WaterReminder
 import app.bodyfit.sensor.Permissions
+import app.bodyfit.ui.TEST_REMINDER_DELAY_MS
 import app.bodyfit.ui.components.GoalSlider
 import app.bodyfit.ui.components.SettingsCard
 
@@ -65,11 +66,13 @@ fun WaterReminderScreen(
     // app's notifications or the reminder channel off, in the phone's settings meanwhile.
     var notificationsAllowed by remember { mutableStateOf(Permissions.hasNotifications(context)) }
     var channelBlocked by remember { mutableStateOf(false) }
+    var fullScreenAllowed by remember { mutableStateOf(WaterReminder.canShowFullScreen(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, settings.waterReminderSound, settings.waterReminderRingUntilStopped) {
         fun refresh() {
             notificationsAllowed = Permissions.hasNotifications(context)
             channelBlocked = WaterReminder.isBlocked(context, settings)
+            fullScreenAllowed = WaterReminder.canShowFullScreen(context)
         }
         refresh()
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
@@ -258,24 +261,49 @@ fun WaterReminderScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Keep ringing until I respond",
+                        text = "Ring like an alarm until I respond",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
                     )
                     Switch(checked = settings.waterReminderRingUntilStopped, onCheckedChange = onRing)
                 }
+                if (settings.waterReminderRingUntilStopped && !fullScreenAllowed &&
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+                ) {
+                    Text(
+                        text = "To show the reminder on screen like an alarm, allow full-screen " +
+                            "alerts for Body Fit. Without it the reminder rings and waits in " +
+                            "the notification shade.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                        Uri.fromParts("package", context.packageName, null),
+                                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        },
+                    ) { Text("Allow full-screen alerts") }
+                }
                 OutlinedButton(onClick = onTest, enabled = notificationsAllowed) {
-                    Text("Send a test reminder")
+                    Text("Send a test reminder in ${TEST_REMINDER_DELAY_MS / 1000} seconds")
                 }
                 Text(
                     text = if (settings.waterReminderRingUntilStopped) {
-                        "Rings over and over at the notification volume, and drops down over the " +
-                            "screen with your cup buttons, until you tap a cup, swipe it away or " +
-                            "pull down the notification shade. Do Not Disturb still silences it. "
+                        "Rings like an alarm: it opens full screen, over the lock screen too, and " +
+                            "keeps ringing until you tap a cup or Not now. While you are using " +
+                            "the phone it stays at the top of the screen until answered. Do Not " +
+                            "Disturb still silences it. "
                     } else {
                         "Plays once when a reminder arrives, at the notification volume. "
-                    } + "The test ignores your hours and today's total, so you can hear it now.",
+                    } + "The test ignores your hours and today's total; lock the phone after tapping it to " +
+                        "see how a reminder arrives on the lock screen.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

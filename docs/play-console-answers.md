@@ -54,6 +54,7 @@ Supporting facts, each checkable in the repo:
 | `POST_NOTIFICATIONS` | The lock-screen card showing daily totals, and the foreground service notification Android requires. |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH` | Counting steps while the app is closed. The `health` type is the correct one: the service reads a health sensor. |
 | `FOREGROUND_SERVICE_LOCATION` | The exercise session service keeps reading GPS with the screen off during a running or cycling session the user started. Only while the session notification shows. |
+| `USE_FULL_SCREEN_INTENT` | A water reminder the user turned on, set to ring like an alarm, opens full screen so the user can see what is ringing and answer it. Android 14 and later do not grant it by default to non-alarm apps; the app asks the user to allow it from the reminder page. Declare it in Play Console's full-screen intent declaration as a user-set alarm-style reminder. |
 | `WAKE_LOCK` | Held only while an exercise session runs, bounded at six hours, so its clock and jump count continue with the screen off. |
 | `RECEIVE_BOOT_COMPLETED` | Resuming step counting after a restart. |
 | `ACCESS_FINE_LOCATION` | Measuring speed during a running or cycling session the user starts, to estimate effort. Requested at the session, not at launch. Optional: refusing falls back to an assumed effort. No coordinate is stored or transmitted. |

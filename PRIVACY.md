@@ -85,6 +85,7 @@ no account to close.
 | Notifications (`POST_NOTIFICATIONS`) | To show the lock-screen card with your daily totals. |
 | Foreground service (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH`, `FOREGROUND_SERVICE_LOCATION`) | To keep counting steps while the app is closed, and to keep timing an exercise session you started with the screen off. Android requires a visible notification for each. |
 | Wake lock (`WAKE_LOCK`) | Held only while an exercise session runs, so its clock keeps going with the screen off. |
+| Full-screen alerts (`USE_FULL_SCREEN_INTENT`) | Shows a ringing water reminder on screen like an alarm, only if you turn reminders on. |
 | Run at startup (`RECEIVE_BOOT_COMPLETED`) | To resume counting after you restart your phone. |
 | Location (`ACCESS_FINE_LOCATION`) | To measure speed during a running or cycling session you started. Optional, used only while that session is open, and no coordinate is stored. |
 

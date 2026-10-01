@@ -225,8 +225,12 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         repository.userSettings.setWaterReminderSound(value)
     }
 
-    /** Posts a reminder now, whatever the hours and the day's total, to hear the sound. */
+    /**
+     * Posts a reminder after [TEST_REMINDER_DELAY_MS], whatever the hours and the day's
+     * total. The delay leaves time to lock the phone and see how it arrives on the lock screen.
+     */
     fun sendTestWaterReminder() = viewModelScope.launch {
+        delay(TEST_REMINDER_DELAY_MS)
         WaterReminder.post(getApplication(), repository.currentSettings(), repository.drinkState().drankTodayMl)
     }
 
@@ -241,3 +245,6 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         if (enabled) StepTrackerService.start(context) else StepTrackerService.stop(context)
     }
 }
+
+/** How long the test reminder waits, so the phone can be locked before it rings. */
+const val TEST_REMINDER_DELAY_MS = 10_000L
