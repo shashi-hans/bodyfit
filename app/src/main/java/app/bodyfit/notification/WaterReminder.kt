@@ -21,6 +21,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import app.bodyfit.R
@@ -29,7 +30,11 @@ import app.bodyfit.data.HealthRepository
 import app.bodyfit.data.UserSettings
 import app.bodyfit.data.Volume
 import app.bodyfit.sensor.Permissions
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import java.time.Instant
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.concurrent.TimeUnit
@@ -140,6 +145,64 @@ object WaterReminder {
         time: LocalTime = LocalTime.now(),
     ): Boolean =
         eligible(settings, drankTodayMl, time) && (lastDrinkAt == null || lastDrinkAt < dismissedAt)
+
+    /**
+     * When the next reminder will actually ring, for the Today screen.
+     *
+     * The scheduled checks alone would mislead: a check outside the user's hours, after the
+     * goal is met, or soon after a drink rings nothing. So each upcoming check, the waiting
+     * snooze and then the regular run and every interval after it for two days, is put
+     * through the same rules the workers use, and the first that would ring is the answer.
+     * A check on a later day starts that day's total at zero.
+     */
+    fun predictNext(
+        settings: UserSettings,
+        drankTodayMl: Int,
+        lastDrinkAt: Long?,
+        nextRunAt: Long?,
+        snoozeAt: Long?,
+        now: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): NextReminder {
+        if (!settings.waterReminderEnabled) return NextReminder.Off
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val goalReached = drankTodayMl >= settings.waterGoalMl
+        fun drankOn(at: Long) =
+            if (Instant.ofEpochMilli(at).atZone(zone).toLocalDate() == today) drankTodayMl else 0
+        fun timeOf(at: Long) = Instant.ofEpochMilli(at).atZone(zone).toLocalTime()
+
+        snoozeAt?.let { at ->
+            val dismissedAt = at - SNOOZE_MINUTES * 60_000L
+            if (isSnoozeDue(settings, drankOn(at), lastDrinkAt, dismissedAt, timeOf(at))) {
+                return NextReminder.At(maxOf(at, now), goalReached)
+            }
+        }
+        val intervalMs = settings.waterReminderMinutes * 60_000L
+        var at = maxOf(nextRunAt ?: return NextReminder.Unknown, now)
+        val until = now + 2 * 24 * 60 * 60_000L
+        while (at <= until) {
+            if (isDue(settings, drankOn(at), lastDrinkAt, now = at, time = timeOf(at))) {
+                return NextReminder.At(at, goalReached)
+            }
+            at += intervalMs
+        }
+        return NextReminder.Unknown
+    }
+
+    /**
+     * The next run of the regular reminder and of a waiting snooze, as WorkManager schedules
+     * them; null where none is waiting.
+     */
+    fun observeNextRuns(context: Context): Flow<Pair<Long?, Long?>> {
+        val work = WorkManager.getInstance(context)
+        fun List<WorkInfo>.nextAt(): Long? = firstOrNull { it.state == WorkInfo.State.ENQUEUED }
+            ?.nextScheduleTimeMillis
+            ?.takeIf { it in 1 until Long.MAX_VALUE }
+        return combine(
+            work.getWorkInfosForUniqueWorkFlow(WORK_NAME),
+            work.getWorkInfosForUniqueWorkFlow(SNOOZE_WORK_NAME),
+        ) { regular, snooze -> regular.nextAt() to snooze.nextAt() }
+    }
 
     /** Drops a waiting snooze, when a regular reminder has just rung in its place. */
     fun cancelSnooze(context: Context) {
@@ -345,4 +408,16 @@ class WaterReminderWorker(
         if (posted) WaterReminder.cancelSnooze(applicationContext)
         return Result.success()
     }
+}
+
+/** What the Today screen says about the next water reminder. */
+sealed interface NextReminder {
+    /** Reminders are switched off. */
+    data object Off : NextReminder
+
+    /** On, but nothing is scheduled yet, or nothing would ring in the next two days. */
+    data object Unknown : NextReminder
+
+    /** The next reminder rings at [atMillis]; [goalReachedToday] when today needs no more. */
+    data class At(val atMillis: Long, val goalReachedToday: Boolean) : NextReminder
 }

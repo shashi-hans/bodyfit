@@ -59,6 +59,9 @@ interface HealthDao {
     @Query("SELECT MAX(loggedAt) FROM water_entry")
     suspend fun lastWaterLoggedAt(): Long?
 
+    @Query("SELECT MAX(loggedAt) FROM water_entry")
+    fun observeLastWaterLoggedAt(): Flow<Long?>
+
     /** Every drink ever logged. Only the backup writer needs this. */
     @Query("SELECT * FROM water_entry ORDER BY loggedAt")
     suspend fun allWaterEntries(): List<WaterEntry>

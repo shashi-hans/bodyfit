@@ -1,6 +1,7 @@
 package app.bodyfit.notification
 
 import app.bodyfit.data.UserSettings
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -92,5 +93,59 @@ class WaterReminderTest {
         assertTrue(WaterReminder.inWindow(lateEvening, 23))
         assertFalse(WaterReminder.inWindow(lateEvening, 0))
         assertTrue(WaterReminder.hourLabel(24).contains("59"))
+    }
+
+    // ---- predictNext --------------------------------------------------------------------
+
+    private val utc = java.time.ZoneOffset.UTC
+    private fun at(day: Int, hour: Int, minute: Int = 0): Long =
+        java.time.LocalDateTime.of(2026, 10, day, hour, minute).toInstant(utc).toEpochMilli()
+    private val hourly = on.copy(waterReminderStartHour = 8, waterReminderEndHour = 22)
+
+    @Test
+    fun `off says off`() {
+        assertEquals(
+            NextReminder.Off,
+            WaterReminder.predictNext(hourly.copy(waterReminderEnabled = false), 0, null, at(1, 10), null, at(1, 9), utc),
+        )
+    }
+
+    @Test
+    fun `the next scheduled run when it would ring`() {
+        val next = WaterReminder.predictNext(hourly, 500, null, at(1, 10), null, at(1, 9, 30), utc)
+        assertEquals(NextReminder.At(at(1, 10), false), next)
+    }
+
+    @Test
+    fun `a run outside the hours moves to the first run inside them`() {
+        // Runs every hour from 21:30; 22:30 and the small hours are outside 8 to 22.
+        val next = WaterReminder.predictNext(hourly, 500, null, at(1, 21, 30), null, at(1, 21), utc)
+        assertEquals(NextReminder.At(at(1, 21, 30), false), next)
+        val late = WaterReminder.predictNext(hourly, 500, null, at(1, 22, 30), null, at(1, 22, 10), utc)
+        assertEquals(NextReminder.At(at(2, 8, 30), false), late)
+    }
+
+    @Test
+    fun `a met goal skips the rest of today and says so`() {
+        val next = WaterReminder.predictNext(hourly, 2_500, null, at(1, 10), null, at(1, 9, 30), utc)
+        assertEquals(NextReminder.At(at(2, 8), true), next)
+    }
+
+    @Test
+    fun `a drink just now skips the run it is too close to`() {
+        // Drank at 9:55; the 10:00 run is too soon, the 11:00 run rings.
+        val next = WaterReminder.predictNext(hourly, 500, at(1, 9, 55), at(1, 10), null, at(1, 9, 56), utc)
+        assertEquals(NextReminder.At(at(1, 11), false), next)
+    }
+
+    @Test
+    fun `a waiting snooze comes first`() {
+        val next = WaterReminder.predictNext(hourly, 500, null, at(1, 11), at(1, 10, 15), at(1, 10, 1), utc)
+        assertEquals(NextReminder.At(at(1, 10, 15), false), next)
+    }
+
+    @Test
+    fun `no schedule yet is unknown`() {
+        assertEquals(NextReminder.Unknown, WaterReminder.predictNext(hourly, 0, null, null, null, at(1, 9), utc))
     }
 }

@@ -15,6 +15,7 @@ import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
 import app.bodyfit.notification.WaterReminder
+import app.bodyfit.notification.NextReminder
 import app.bodyfit.data.WaterEntry
 import app.bodyfit.sensor.StepTrackerService
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -59,6 +61,19 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     /** Whole history, for streaks and the health score. */
     val allDays: StateFlow<List<DailyRecord>> = repository.observeAllDays()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * When the next water reminder will ring, worked out from the schedule, the settings and
+     * the day's drinks, and updated whenever any of them changes.
+     */
+    val nextReminder: StateFlow<NextReminder> = combine(
+        repository.settings,
+        dateKey.flatMapLatest { repository.observeWaterEntries(it) },
+        repository.observeLastDrinkAt(),
+        WaterReminder.observeNextRuns(application),
+    ) { settings, entries, lastDrinkAt, (nextRunAt, snoozeAt) ->
+        WaterReminder.predictNext(settings, entries.sumOf { it.amountMl }, lastDrinkAt, nextRunAt, snoozeAt)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NextReminder.Unknown)
 
     val waterEntries: StateFlow<List<WaterEntry>> = dateKey
         .flatMapLatest { repository.observeWaterEntries(it) }

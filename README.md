@@ -80,6 +80,13 @@ which stops the sound. While the phone is in use Android shows the same reminder
 that stays until answered. Android 14 and later leave full-screen intents to the user for
 apps that are not alarm clocks, so the page links to that setting when it is off; without it
 the reminder still rings and waits in the shade. Do Not Disturb still silences it.
+
+The Today screen shows when the next reminder will ring, under the BMI card. It is not just
+WorkManager's next run: the waiting snooze and every scheduled check for the next two days go
+through the same rules the workers apply (hours, goal, a recent drink, a later day starting
+from zero), and the first that would ring is shown. "Goal reached" is added when today needs
+no more. The card updates as the schedule, the settings or the day's drinks change, and opens
+the reminder page. WorkManager rather than exact alarms: a
 reminder a few minutes late costs nothing, and exact alarms need a permission Play reviews.
 The notification permission is asked when the switch is turned on. Tapping a cup logs the
 drink and dismisses the reminder.

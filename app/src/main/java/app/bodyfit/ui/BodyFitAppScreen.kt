@@ -163,6 +163,7 @@ fun BodyFitAppScreen(
     val hourly by viewModel.hourly.collectAsState()
     val hourlyWater by viewModel.hourlyWater.collectAsState()
     val hourlySessions by viewModel.hourlySessions.collectAsState()
+    val nextReminder by viewModel.nextReminder.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val autoBackupTarget by viewModel.autoBackupTarget.collectAsState()
     val autoBackupLastRun by viewModel.autoBackupLastRun.collectAsState()
@@ -314,6 +315,10 @@ fun BodyFitAppScreen(
                         onOpenMenu = { scope.launch { drawerState.open() } },
                         onOpenHealth = {
                             navController.navigate(HEALTH_ROUTE) { launchSingleTop = true }
+                        },
+                        nextReminder = nextReminder,
+                        onOpenWaterReminders = {
+                            navController.navigate(MenuPage.WATER_REMINDER.route) { launchSingleTop = true }
                         },
                         onOpenTrends = { metric ->
                             trendsFocus = metric

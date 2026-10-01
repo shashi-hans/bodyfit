@@ -46,6 +46,9 @@ class HealthRepository(context: Context) {
      * Today's water and the time of the last drink on any day. The last drink is not limited
      * to today, so a glass at 23:50 still counts for a reminder due at 00:05.
      */
+    /** The time of the last drink on any day, as it changes. */
+    fun observeLastDrinkAt(): Flow<Long?> = dao.observeLastWaterLoggedAt()
+
     suspend fun drinkState(): DrinkState =
         DrinkState(drankTodayMl = dao.waterTotal(Dates.today()), lastDrinkAt = dao.lastWaterLoggedAt())
 
