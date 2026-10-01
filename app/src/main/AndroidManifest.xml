@@ -21,6 +21,10 @@
     <!-- Held only while an exercise session runs, so its clock and jump count continue with
          the screen off. Install-time, no prompt. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Opens a ringing water reminder full screen over the lock screen, like an alarm.
+         Android 14 and later leave it to the user for apps that are not alarm clocks; the
+         Water reminders page links to that setting. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- Declared but not required, so the listing stays downloadable on every device. The
          app checks for the sensor at launch instead, and says plainly why it cannot run
@@ -69,6 +73,16 @@
         <receiver
             android:name=".notification.WaterActionReceiver"
             android:exported="false" />
+
+        <!-- Its own task, so answering a reminder never brings the rest of the app forward;
+             shown over the lock screen from code (setShowWhenLocked / setTurnScreenOn). -->
+        <activity
+            android:name=".notification.WaterReminderAlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="app.bodyfit.reminder"
+            android:theme="@style/Theme.BodyFit" />
 
         <receiver
             android:name=".notification.WaterReminderDismissReceiver"

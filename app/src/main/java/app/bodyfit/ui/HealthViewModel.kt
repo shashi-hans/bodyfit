@@ -15,6 +15,7 @@ import app.bodyfit.data.HourlyRecord
 import app.bodyfit.data.Sex
 import app.bodyfit.data.UserSettings
 import app.bodyfit.notification.WaterReminder
+import app.bodyfit.notification.NextReminder
 import app.bodyfit.data.WaterEntry
 import app.bodyfit.sensor.StepTrackerService
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -59,6 +61,19 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     /** Whole history, for streaks and the health score. */
     val allDays: StateFlow<List<DailyRecord>> = repository.observeAllDays()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * When the next water reminder will ring, worked out from the schedule, the settings and
+     * the day's drinks, and updated whenever any of them changes.
+     */
+    val nextReminder: StateFlow<NextReminder> = combine(
+        repository.settings,
+        dateKey.flatMapLatest { repository.observeWaterEntries(it) },
+        repository.observeLastDrinkAt(),
+        WaterReminder.observeNextRuns(application),
+    ) { settings, entries, lastDrinkAt, (nextRunAt, snoozeAt) ->
+        WaterReminder.predictNext(settings, entries.sumOf { it.amountMl }, lastDrinkAt, nextRunAt, snoozeAt)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NextReminder.Unknown)
 
     val waterEntries: StateFlow<List<WaterEntry>> = dateKey
         .flatMapLatest { repository.observeWaterEntries(it) }
@@ -225,8 +240,12 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         repository.userSettings.setWaterReminderSound(value)
     }
 
-    /** Posts a reminder now, whatever the hours and the day's total, to hear the sound. */
+    /**
+     * Posts a reminder after [TEST_REMINDER_DELAY_MS], whatever the hours and the day's
+     * total. The delay leaves time to lock the phone and see how it arrives on the lock screen.
+     */
     fun sendTestWaterReminder() = viewModelScope.launch {
+        delay(TEST_REMINDER_DELAY_MS)
         WaterReminder.post(getApplication(), repository.currentSettings(), repository.drinkState().drankTodayMl)
     }
 
@@ -241,3 +260,6 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         if (enabled) StepTrackerService.start(context) else StepTrackerService.stop(context)
     }
 }
+
+/** How long the test reminder waits, so the phone can be locked before it rings. */
+const val TEST_REMINDER_DELAY_MS = 10_000L

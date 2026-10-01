@@ -11,6 +11,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -20,6 +21,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import app.bodyfit.R
@@ -28,7 +30,11 @@ import app.bodyfit.data.HealthRepository
 import app.bodyfit.data.UserSettings
 import app.bodyfit.data.Volume
 import app.bodyfit.sensor.Permissions
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import java.time.Instant
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.concurrent.TimeUnit
@@ -48,6 +54,7 @@ object WaterReminder {
     private const val WORK_NAME = "water-reminder"
     private const val SNOOZE_WORK_NAME = "water-reminder-snooze"
     private const val DISMISS_REQUEST = 1003
+    private const val ALARM_REQUEST = 1004
 
     /** How long a dismissed reminder waits before ringing again, if no drink was logged. */
     const val SNOOZE_MINUTES = 15L
@@ -138,6 +145,64 @@ object WaterReminder {
         time: LocalTime = LocalTime.now(),
     ): Boolean =
         eligible(settings, drankTodayMl, time) && (lastDrinkAt == null || lastDrinkAt < dismissedAt)
+
+    /**
+     * When the next reminder will actually ring, for the Today screen.
+     *
+     * The scheduled checks alone would mislead: a check outside the user's hours, after the
+     * goal is met, or soon after a drink rings nothing. So each upcoming check, the waiting
+     * snooze and then the regular run and every interval after it for two days, is put
+     * through the same rules the workers use, and the first that would ring is the answer.
+     * A check on a later day starts that day's total at zero.
+     */
+    fun predictNext(
+        settings: UserSettings,
+        drankTodayMl: Int,
+        lastDrinkAt: Long?,
+        nextRunAt: Long?,
+        snoozeAt: Long?,
+        now: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): NextReminder {
+        if (!settings.waterReminderEnabled) return NextReminder.Off
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val goalReached = drankTodayMl >= settings.waterGoalMl
+        fun drankOn(at: Long) =
+            if (Instant.ofEpochMilli(at).atZone(zone).toLocalDate() == today) drankTodayMl else 0
+        fun timeOf(at: Long) = Instant.ofEpochMilli(at).atZone(zone).toLocalTime()
+
+        snoozeAt?.let { at ->
+            val dismissedAt = at - SNOOZE_MINUTES * 60_000L
+            if (isSnoozeDue(settings, drankOn(at), lastDrinkAt, dismissedAt, timeOf(at))) {
+                return NextReminder.At(maxOf(at, now), goalReached)
+            }
+        }
+        val intervalMs = settings.waterReminderMinutes * 60_000L
+        var at = maxOf(nextRunAt ?: return NextReminder.Unknown, now)
+        val until = now + 2 * 24 * 60 * 60_000L
+        while (at <= until) {
+            if (isDue(settings, drankOn(at), lastDrinkAt, now = at, time = timeOf(at))) {
+                return NextReminder.At(at, goalReached)
+            }
+            at += intervalMs
+        }
+        return NextReminder.Unknown
+    }
+
+    /**
+     * The next run of the regular reminder and of a waiting snooze, as WorkManager schedules
+     * them; null where none is waiting.
+     */
+    fun observeNextRuns(context: Context): Flow<Pair<Long?, Long?>> {
+        val work = WorkManager.getInstance(context)
+        fun List<WorkInfo>.nextAt(): Long? = firstOrNull { it.state == WorkInfo.State.ENQUEUED }
+            ?.nextScheduleTimeMillis
+            ?.takeIf { it in 1 until Long.MAX_VALUE }
+        return combine(
+            work.getWorkInfosForUniqueWorkFlow(WORK_NAME),
+            work.getWorkInfosForUniqueWorkFlow(SNOOZE_WORK_NAME),
+        ) { regular, snooze -> regular.nextAt() to snooze.nextAt() }
+    }
 
     /** Drops a waiting snooze, when a regular reminder has just rung in its place. */
     fun cancelSnooze(context: Context) {
@@ -233,13 +298,25 @@ object WaterReminder {
             .setColor(ContextCompat.getColor(context, R.color.notification_accent))
             .setContentTitle("💧 Time for some water")
             .setContentText("${Volume.format(drankTodayMl)} of ${Volume.format(settings.waterGoalMl)} today")
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setCategory(
+                if (settings.waterReminderRingUntilStopped) NotificationCompat.CATEGORY_ALARM
+                else NotificationCompat.CATEGORY_REMINDER,
+            )
             .setAutoCancel(true)
-            .setContentIntent(ActivityNotification.openApp(context))
+            .setContentIntent(
+                if (settings.waterReminderRingUntilStopped) alarmIntent(context)
+                else ActivityNotification.openApp(context),
+            )
             // Fired when the user swipes the reminder away or clears all notifications, and not
             // when a cup button or the app cancels it, so only a dismissal starts the snooze.
             .setDeleteIntent(dismissIntent(context))
         settings.cupSizesMl.forEach { builder.addAction(ActivityNotification.waterAction(context, it)) }
+        if (settings.waterReminderRingUntilStopped) {
+            // Opens the reminder full screen over the lock screen, like an alarm. While the
+            // phone is in use Android shows it as a pop-up that stays until answered instead,
+            // so a ringing phone always shows what is ringing.
+            builder.setFullScreenIntent(alarmIntent(context), true)
+        }
         val notification = builder.build()
         if (settings.waterReminderRingUntilStopped) {
             // Android repeats the sound until the notification is answered, swiped away or
@@ -248,6 +325,23 @@ object WaterReminder {
         }
         runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
     }
+
+    /**
+     * Whether Android lets this app open the reminder full screen. Android 14 and later leave
+     * that to the user for apps that are not alarm clocks or phone apps.
+     */
+    fun canShowFullScreen(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+            context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() == true
+
+    private fun alarmIntent(context: Context): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            ALARM_REQUEST,
+            Intent(context, WaterReminderAlarmActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun dismissIntent(context: Context): PendingIntent =
         PendingIntent.getBroadcast(
@@ -314,4 +408,16 @@ class WaterReminderWorker(
         if (posted) WaterReminder.cancelSnooze(applicationContext)
         return Result.success()
     }
+}
+
+/** What the Today screen says about the next water reminder. */
+sealed interface NextReminder {
+    /** Reminders are switched off. */
+    data object Off : NextReminder
+
+    /** On, but nothing is scheduled yet, or nothing would ring in the next two days. */
+    data object Unknown : NextReminder
+
+    /** The next reminder rings at [atMillis]; [goalReachedToday] when today needs no more. */
+    data class At(val atMillis: Long, val goalReachedToday: Boolean) : NextReminder
 }

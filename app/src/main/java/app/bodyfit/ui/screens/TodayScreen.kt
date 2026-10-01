@@ -42,6 +42,7 @@ import app.bodyfit.data.ExerciseSession
 import app.bodyfit.data.ExerciseType
 import app.bodyfit.data.UserSettings
 import app.bodyfit.insights.Insights
+import app.bodyfit.notification.NextReminder
 import app.bodyfit.ui.Metric
 import app.bodyfit.ui.components.AppLogo
 import app.bodyfit.ui.components.BreathingDialog
@@ -54,6 +55,7 @@ import app.bodyfit.ui.components.WellnessNote
 import app.bodyfit.ui.theme.LocalViz
 import app.bodyfit.ui.theme.color
 import kotlinx.coroutines.delay
+import java.time.LocalDate
 import java.time.LocalTime
 import java.util.Locale
 
@@ -71,6 +73,9 @@ fun TodayScreen(
     onOpenHealth: () -> Unit,
     /** Opens Trends on the given metric for the active day. */
     onOpenTrends: (Metric) -> Unit,
+    /** When the next water reminder rings, shown under the BMI card. */
+    nextReminder: NextReminder,
+    onOpenWaterReminders: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -248,6 +253,8 @@ fun TodayScreen(
                 }
             }
         }
+
+        item { NextReminderCard(nextReminder, minute, onOpenWaterReminders) }
 
         item { Spacer(Modifier.height(4.dp)) }
     }
@@ -534,4 +541,64 @@ internal fun progressOf(metric: Metric, record: DailyRecord, settings: UserSetti
     val goal = metric.dailyGoal(settings)
     if (goal <= 0) return 0f
     return (metric.value(record, settings) / goal).toFloat().coerceIn(0f, 1f)
+}
+
+/**
+ * One line on when the next water reminder rings, opening the reminder page.
+ *
+ * [minute] is the screen's minute tick, so "today" and "tomorrow" stay right across midnight.
+ */
+@Composable
+private fun NextReminderCard(next: NextReminder, minute: Long, onOpen: () -> Unit) {
+    val (title, detail) = remember(next, minute) { nextReminderText(next) }
+    SectionCard(corner = 20.dp, modifier = Modifier.clickable(onClick = onOpen)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "⏰", style = MaterialTheme.typography.titleMedium)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "Water reminder settings",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** The card's two lines: what it is, and when. */
+private fun nextReminderText(next: NextReminder): Pair<String, String> = when (next) {
+    NextReminder.Off -> "Water reminders" to "Off · tap to turn on"
+    NextReminder.Unknown -> "Next water reminder" to "Not scheduled yet"
+    is NextReminder.At -> {
+        val at = java.time.Instant.ofEpochMilli(next.atMillis).atZone(java.time.ZoneId.systemDefault())
+        val time = at.toLocalTime().format(
+            java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT),
+        )
+        val day = when (at.toLocalDate()) {
+            LocalDate.now() -> time
+            LocalDate.now().plusDays(1) -> "Tomorrow, $time"
+            else -> Dates.dayLabel(at.toLocalDate().toString()) + ", " + time
+        }
+        if (next.goalReachedToday) "Goal reached · next water reminder" to day
+        else "Next water reminder" to day
+    }
 }

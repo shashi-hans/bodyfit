@@ -70,9 +70,23 @@ channel ever shows in the phone's settings. The sound URI is not carried in a ba
 it names a file on this phone. By default the reminder keeps ringing until the user responds: the notification
 carries `FLAG_INSISTENT`, so Android repeats the sound until a cup is tapped, the reminder is
 swiped away or the shade is opened, and its channel is high importance so it drops down over
-the screen with the cup buttons while it rings. A switch returns it to a single sound. Do Not
-Disturb still silences it; ringing through that would need a full-screen alarm, which Play
-limits to alarm and calling apps. WorkManager rather than exact alarms: a
+the screen with the cup buttons while it rings. A switch returns it to a single sound.
+
+A ringing reminder also opens `WaterReminderAlarmActivity` through a full-screen intent: over
+the lock screen, with the screen turned on, it shows today's progress, the cup buttons and
+"Not now". A reminder that only rang left users hunting for what was making the noise. A cup
+logs the drink, Not now or Back snoozes for 15 minutes, and either cancels the notification,
+which stops the sound. While the phone is in use Android shows the same reminder as a pop-up
+that stays until answered. Android 14 and later leave full-screen intents to the user for
+apps that are not alarm clocks, so the page links to that setting when it is off; without it
+the reminder still rings and waits in the shade. Do Not Disturb still silences it.
+
+The Today screen shows when the next reminder will ring, under the BMI card. It is not just
+WorkManager's next run: the waiting snooze and every scheduled check for the next two days go
+through the same rules the workers apply (hours, goal, a recent drink, a later day starting
+from zero), and the first that would ring is shown. "Goal reached" is added when today needs
+no more. The card updates as the schedule, the settings or the day's drinks change, and opens
+the reminder page. WorkManager rather than exact alarms: a
 reminder a few minutes late costs nothing, and exact alarms need a permission Play reviews.
 The notification permission is asked when the switch is turned on. Tapping a cup logs the
 drink and dismisses the reminder.
